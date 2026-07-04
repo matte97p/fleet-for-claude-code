@@ -1,17 +1,28 @@
 name: Release
 
-# Publishes platform-specific VSIXes to the VS Code Marketplace on a version tag.
-# Each OS runner installs the Agent SDK's own-platform binary, so every target
-# vsix ships a working `claude` binary (the single-machine blocker is solved here).
+# Publishes platform-specific VSIXes to the VS Code Marketplace (and Open VSX,
+# if OVSX_PAT is set) on a version tag. Each OS runner installs the Agent SDK's
+# own-platform binary, so every target vsix ships a working `claude` binary.
 #
 # Prerequisites (one-time, see PUBLISHING.md):
 #   - A registered Marketplace publisher; set `publisher` in package.json to it.
 #   - Repo secret VSCE_PAT = an Azure DevOps PAT with "Marketplace: Manage".
+#   - (optional) Repo secret OVSX_PAT = an Open VSX token, to mirror there too.
+#
+# darwin-x64 (Intel Mac) is NOT in the automatic matrix: GitHub's macos-13 Intel
+# runners are scarce/deprecated and reliably stall, which would hang the release.
+# Publish it on demand via "Run workflow" with "intel_mac" checked.
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      intel_mac:
+        description: "Also publish darwin-x64 (Intel Mac). Only if a macos-13 runner is free; cancel the job if it stalls."
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -21,8 +32,6 @@ jobs:
         include:
           - os: macos-14
             target: darwin-arm64
-          - os: macos-13
-            target: darwin-x64
           - os: ubuntu-latest
             target: linux-x64
           - os: ubuntu-24.04-arm
@@ -41,7 +50,33 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Publish ${{ matrix.target }}
-        # No --no-dependencies: we WANT the SDK + its per-platform binary bundled.
-        run: npx @vscode/vsce publish --target ${{ matrix.target }}
+        shell: bash
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          TARGET: ${{ matrix.target }}
+        run: bash .github/scripts/publish.sh
+
+  # Intel Mac — opt-in only (Run workflow -> intel_mac = true). Kept out of the
+  # tag-push matrix so a stalled macos-13 runner never blocks a normal release.
+  publish-intel-mac:
+    if: github.event_name == 'workflow_dispatch' && inputs.intel_mac
+    runs-on: macos-13
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Publish darwin-x64
+        shell: bash
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          TARGET: darwin-x64
+        run: bash .github/scripts/publish.sh

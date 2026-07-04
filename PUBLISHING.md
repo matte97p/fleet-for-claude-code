@@ -1,58 +1,73 @@
-# Publishing Claude Fleet to the VS Code Marketplace
+# Publishing Fleet for Claude Code
 
-Everything code-side is ready. The steps below need **your** Marketplace account and
-a Personal Access Token — they can't be automated for you.
+Current status: **published** on the VS Code Marketplace as `matte97p.claude-fleet`
+for `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`.
+Listing: <https://marketplace.visualstudio.com/items?itemName=matte97p.claude-fleet>
 
-## 0. One-time: create a publisher
+## How releases work
 
-1. Sign in at <https://marketplace.visualstudio.com/manage> with a Microsoft account.
-2. Create a **publisher** (pick an id, e.g. `matteo-perino`). Note the id.
-3. Set it in `package.json` → `"publisher": "<your-id>"`.
-   Also update `repository`, `bugs`, `homepage` URLs to your real GitHub repo.
-   (The extension no longer hardcodes the publisher anywhere, so changing it is safe.)
+`.github/workflows/release.yml` builds a **per-platform** vsix (each OS runner bundles the
+Agent SDK's own-platform `claude` binary) and publishes it via `.github/scripts/publish.sh`,
+which pushes to the **VS Code Marketplace** and — if `OVSX_PAT` is set — to **Open VSX**.
+The publish step is **idempotent**: a target/version that already exists is treated as
+success, so re-running a release never fails on duplicates.
 
-## 1. One-time: get a Personal Access Token (PAT)
+To cut a release:
 
-1. Go to <https://dev.azure.com> → your org → **User settings ▸ Personal access tokens**.
-2. **New Token** → Organization: *All accessible organizations* → Scopes: **Custom defined**
-   → **Marketplace: Manage** (check it). Create and copy the token.
-
-## 2. Publish
-
-The tricky part is the bundled `claude` binary: it is **per-platform**. Don't publish a
-single vsix from your Mac — Windows/Linux users would get a broken build. Two options:
-
-### Option A — automated, all platforms (recommended)
-
-A GitHub Actions release workflow (`.github/workflows/release.yml`) builds and publishes a
-vsix **per platform** (mac arm64/x64, linux x64/arm64, win x64) from the matching OS runner.
-
-1. Push this repo to GitHub.
-2. Repo → **Settings ▸ Secrets and variables ▸ Actions** → add secret `VSCE_PAT` = your token.
-3. Tag a release and push it:
-   ```bash
-   git tag v0.0.7 && git push origin v0.0.7
-   ```
-4. The workflow publishes all platform targets. Done.
-
-### Option B — manual, one platform (quick test)
-
-From this Mac (publishes only the darwin-arm64 target — fine for a personal/first test):
 ```bash
-cd lab/fleetview
-npx @vscode/vsce login <your-publisher-id>   # paste the PAT once
+# bump "version" in package.json, then:
+npm install --package-lock-only    # keep package-lock version in sync (npm ci needs it)
+git commit -am "Release vX.Y.Z" && git push
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+The tag push runs the 4-target matrix (arm64 mac, x64 linux, arm64 linux, x64 win).
+
+## Secrets (repo → Settings ▸ Secrets and variables ▸ Actions)
+
+- **`VSCE_PAT`** (required) — Azure DevOps PAT with **Marketplace: Manage**.
+  Create at <https://dev.azure.com/<org>/_usersSettings/tokens> (Organization = *All accessible
+  organizations*, Scopes → *Custom defined* → *Marketplace* → *Manage*). Note: creating the
+  Azure DevOps org now requires linking a (free) Azure subscription.
+- **`OVSX_PAT`** (optional) — enables the Open VSX mirror (see below).
+
+## Open VSX (Cursor / VSCodium / Windsurf)
+
+Open VSX is a separate registry with its own account — **no Azure needed**.
+
+1. Sign in at <https://open-vsx.org> with **GitHub**.
+2. Go to your **Settings ▸ Access Tokens** → generate a token.
+3. Sign the Eclipse **Publisher Agreement** (Settings page prompts you) — one-time.
+4. Create the namespace once (locally, with the token):
+   ```bash
+   npx ovsx create-namespace matte97p -p <ovsx-token>
+   ```
+5. Add the token as repo secret **`OVSX_PAT`**. From then on every release also lands on
+   Open VSX automatically.
+
+## Intel Mac (darwin-x64) — on demand
+
+`darwin-x64` is **not** in the automatic matrix: GitHub's `macos-13` Intel runners are
+scarce/deprecated and reliably stall, which would hang the whole release. To publish it:
+
+- Repo → **Actions ▸ Release ▸ Run workflow** → check **`intel_mac`** → Run.
+- If the `macos-13` job sits queued for long, just cancel it — the rest of the release
+  is unaffected. (Apple Silicon Macs are covered by `darwin-arm64`.)
+
+## Manual one-platform publish (quick test)
+
+From an Apple Silicon Mac (publishes only `darwin-arm64`):
+```bash
+npx @vscode/vsce login matte97p     # paste the PAT once
 npm run build
 npx @vscode/vsce publish --target darwin-arm64
 ```
 
 ## Notes / gotchas
 
-- **Size**: the vsix is ~68 MB (the bundled Agent SDK binary). Under the Marketplace
-  limit, but large. To slim it, stop bundling the binary and require a logged-in `claude`
-  on the user's machine (bigger change — not done here).
-- **`private: true` was removed** from package.json (vsce refuses to publish otherwise).
+- **Size**: the vsix is ~68 MB (bundled Agent SDK binary). Under the Marketplace limit.
+- **`npm ci`** in CI fails if `package-lock.json` is out of sync — always run
+  `npm install --package-lock-only` after editing `package.json`.
 - **CI** (`.github/workflows/ci.yml`) runs typecheck + tests + build on every PR/push.
-- **Trademark/policy**: it's a third-party "Claude" extension. Review Marketplace naming
-  guidelines before a public listing to avoid takedown.
-- **Open VSX**: to also list on Cursor/VSCodium's registry, publish to <https://open-vsx.org>
-  with `npx ovsx publish --pat <ovsx-token>` (separate account/token).
+- **Trademark/policy**: third-party "Claude" extension — the README carries the
+  "not affiliated with Anthropic" disclaimer; keep it.
