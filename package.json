@@ -1,0 +1,274 @@
+{
+  "name": "claude-fleet",
+  "displayName": "Fleet for Claude Code",
+  "description": "Unofficial multi-session manager for Claude Code — run and monitor N concurrent chats from one panel. Not affiliated with Anthropic.",
+  "version": "0.0.7",
+  "publisher": "matte97p",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/matte97p/fleet-for-claude-code.git"
+  },
+  "bugs": {
+    "url": "https://github.com/matte97p/fleet-for-claude-code/issues"
+  },
+  "homepage": "https://github.com/matte97p/fleet-for-claude-code#readme",
+  "keywords": [
+    "claude",
+    "claude code",
+    "ai",
+    "agent",
+    "chat",
+    "multi-session"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "AI"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeFleet",
+          "title": "Fleet",
+          "icon": "media/fleet.svg"
+        }
+      ]
+    },
+    "views": {
+      "claudeFleet": [
+        {
+          "id": "claudeFleet.tree",
+          "type": "webview",
+          "name": "Sessions",
+          "icon": "media/fleet.svg",
+          "contextualTitle": "Fleet"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claudeFleet.newChat",
+        "title": "Fleet: New Chat",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeFleet.newFolder",
+        "title": "Fleet: New Folder",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "claudeFleet.openChat",
+        "title": "Fleet: Open Chat"
+      },
+      {
+        "command": "claudeFleet.renameItem",
+        "title": "Rename",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "claudeFleet.deleteItem",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudeFleet.stopChat",
+        "title": "Stop (interrupt)",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "claudeFleet.importSessions",
+        "title": "Fleet: Import Claude Code Sessions",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "claudeFleet.archiveChat",
+        "title": "Archive",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "claudeFleet.unarchiveChat",
+        "title": "Unarchive",
+        "icon": "$(inbox)"
+      },
+      {
+        "command": "claudeFleet.deleteFromDisk",
+        "title": "Delete Session From Disk…",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "claudeFleet.openSettings",
+        "title": "Fleet: Open Settings",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "claudeFleet.openDashboard",
+        "title": "Fleet: Open Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "claudeFleet.togglePlanMode",
+        "title": "Fleet: Toggle Plan Mode",
+        "category": "Fleet"
+      },
+      {
+        "command": "claudeFleet.manageMcp",
+        "title": "Fleet: Add / Manage MCP Server",
+        "icon": "$(server)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeFleet.manageMcp",
+          "when": "view == claudeFleet.tree",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        { "command": "claudeFleet.renameItem", "when": "false" },
+        { "command": "claudeFleet.deleteItem", "when": "false" },
+        { "command": "claudeFleet.archiveChat", "when": "false" },
+        { "command": "claudeFleet.unarchiveChat", "when": "false" },
+        { "command": "claudeFleet.deleteFromDisk", "when": "false" },
+        { "command": "claudeFleet.stopChat", "when": "false" },
+        { "command": "claudeFleet.openChat", "when": "false" }
+      ]
+    },
+    "configuration": {
+      "title": "Fleet for Claude Code",
+      "properties": {
+        "claudeFleet.pathToClaudeExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to the `claude` CLI binary. Leave empty to use the binary bundled with the Agent SDK. Set this if the SDK cannot locate a logged-in `claude`."
+        },
+        "claudeFleet.defaultCwd": {
+          "type": "string",
+          "default": "",
+          "description": "Default working directory for new chats. Leave empty to use the first workspace folder."
+        },
+        "claudeFleet.model": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-fable-5"],
+          "enumItemLabels": ["Default (SDK/subscription default)", "Opus 4.8", "Sonnet 5", "Haiku 4.5", "Fable 5"],
+          "markdownDescription": "Model used for **new chats**. Empty = the SDK/subscription default. You can also type any other model id."
+        },
+        "claudeFleet.defaultEffort": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "low", "medium", "high", "xhigh", "max"],
+          "enumItemLabels": ["Default", "Low (fastest)", "Medium", "High", "X-High", "Max (deepest)"],
+          "markdownDescription": "Default reasoning **effort** for new chats. Higher = deeper reasoning, slower. Empty = SDK default."
+        },
+        "claudeFleet.defaultPermissionMode": {
+          "type": "string",
+          "default": "default",
+          "enum": ["default", "acceptEdits", "plan", "dontAsk", "bypassPermissions"],
+          "enumItemLabels": ["Ask before actions (default)", "Auto-accept file edits", "Plan mode (read-only)", "Don't ask (deny if not pre-approved)", "Bypass all permissions ⚠"],
+          "markdownDescription": "Default **permission mode** for new chats. `bypassPermissions` runs tools without asking — use with care."
+        },
+        "claudeFleet.sound.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play a sound when a chat needs permission or finishes a turn."
+        },
+        "claudeFleet.sound.volume": {
+          "type": "number",
+          "default": 0.6,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Notification sound volume (0–1)."
+        },
+        "claudeFleet.sound.permission": {
+          "type": "string",
+          "default": "ping",
+          "enum": ["ping", "chime", "blip", "marimba", "knock", "custom", "none"],
+          "enumDescriptions": [
+            "Two rising notes (default)",
+            "Gentle two-tone chime",
+            "Short digital blip",
+            "Warm marimba notes",
+            "Low double knock",
+            "Use a custom audio file (set claudeFleet.sound.permissionFile)",
+            "No sound for this event"
+          ],
+          "description": "Sound played when a chat needs your permission."
+        },
+        "claudeFleet.sound.done": {
+          "type": "string",
+          "default": "chime",
+          "enum": ["ping", "chime", "blip", "marimba", "knock", "custom", "none"],
+          "enumDescriptions": [
+            "Two rising notes",
+            "Gentle two-tone chime (default)",
+            "Short digital blip",
+            "Warm marimba notes",
+            "Low double knock",
+            "Use a custom audio file (set claudeFleet.sound.doneFile)",
+            "No sound for this event"
+          ],
+          "description": "Sound played when a chat finishes responding."
+        },
+        "claudeFleet.sound.permissionFile": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to a custom audio file (.mp3/.wav/.ogg) for the permission sound. Used only when claudeFleet.sound.permission is 'custom'."
+        },
+        "claudeFleet.sound.doneFile": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to a custom audio file (.mp3/.wav/.ogg) for the done sound. Used only when claudeFleet.sound.done is 'custom'."
+        },
+        "claudeFleet.quickActions": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Custom quick-action buttons shown above the composer, merged with the built-ins (a custom action with the same `label` overrides the built-in). Each item: `{ \"label\": \"...\", \"prompt\": \"...\", \"title\": \"...\" }`. The `prompt` is sent to the chat and runs in its repo folder.",
+          "items": {
+            "type": "object",
+            "required": ["label", "prompt"],
+            "properties": {
+              "label": { "type": "string", "description": "Button text" },
+              "prompt": { "type": "string", "description": "Prompt sent to the chat" },
+              "title": { "type": "string", "description": "Optional tooltip" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build:ext": "esbuild src/extension/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:@anthropic-ai/claude-agent-sdk --format=cjs --platform=node --target=node18",
+    "build:webview": "vite build",
+    "build": "npm run build:webview && npm run build:ext",
+    "watch:ext": "npm run build:ext -- --sourcemap --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.200"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/vscode": "^1.90.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "esbuild": "^0.20.0",
+    "highlight.js": "^11.9.0",
+    "react": "^18.2.0",
+    "vitest": "^1.6.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.1.0"
+  }
+}
