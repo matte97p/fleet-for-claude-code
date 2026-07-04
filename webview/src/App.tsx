@@ -14,7 +14,7 @@ import type {
 import { DEFAULT_QUICK_ACTIONS } from "../../shared/protocol";
 import { parseLocalSlash } from "../../shared/parsers";
 
-const WINDOW_SIZE = 250; // items rendered initially / after chat switch
+const WINDOW_SIZE = 60; // items rendered initially / after chat switch (scroll up loads more)
 const WINDOW_CHUNK = 250; // items revealed per "show previous" click
 
 export function App() {
@@ -202,9 +202,10 @@ export function App() {
             className="hsel"
             value={chat.config.permissionMode ?? "default"}
             onChange={(e) => setConfig({ permissionMode: e.target.value as any })}
+            title={MODES.find((m) => m.id === (chat.config.permissionMode ?? "default"))?.help}
           >
             {MODES.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
+              <option key={p.id} value={p.id} title={p.help}>{p.label}</option>
             ))}
           </select>
         </label>
@@ -220,13 +221,10 @@ export function App() {
             {chat.config.thinking === "off" ? "🧠 off" : "🧠 on"}
           </button>
         </label>
-        <button
-          className="hbtn"
-          title="Gestisci server MCP"
-          onClick={() => vscode.postMessage({ type: "manageMcp" })}
-        >
-          🧩
-        </button>
+        <label className="hfield">
+          <span>MCP</span>
+          <McpButton servers={chat.mcpServers} />
+        </label>
         {chat.status === "running" && (
           <button
             className="stop"
@@ -262,6 +260,9 @@ export function App() {
             <SubagentGroup key={`sub-${node.startIndex}`} node={node} renderRow={renderRow} />
           )
         )}
+        {chat.streamingThinking && !chat.streamingText && (
+          <LiveThinking text={chat.streamingThinking} />
+        )}
         {chat.streamingText && (
           <div className="cc-block assistant">
             <div className="cc-gutter">✳</div>
@@ -271,10 +272,11 @@ export function App() {
             </div>
           </div>
         )}
-        {chat.status === "running" && !chat.streamingText && (
+        {chat.status === "running" && !chat.streamingText && !chat.streamingThinking && (
           <div className="cc-block assistant">
             <div className="cc-gutter">✳</div>
             <div className="cc-body typing">
+              <span className="think-label">{chat.activity || "sta lavorando…"}</span>
               <span className="dot-typing" />
               <span className="dot-typing" />
               <span className="dot-typing" />
@@ -289,21 +291,9 @@ export function App() {
           ))}
       </div>
 
-      <div className="quick-bar" title="Azioni rapide (eseguite da Claude nella cartella della chat)">
-        {quickActions.map((a) => (
-          <button
-            key={a.label}
-            className="quick-btn"
-            title={a.title}
-            disabled={chat.status === "running"}
-            onClick={() =>
-              vscode.postMessage({ type: "send", chatId: chat.id, text: a.prompt })
-            }
-          >
-            {a.label}
-          </button>
-        ))}
-      </div>
+      <UsageAlert limits={chat.limits} chatId={chat.id} />
+
+      <QuickBar actions={quickActions} chatId={chat.id} disabled={chat.status === "running"} />
 
       <Composer
         draft={draft}
@@ -417,12 +407,14 @@ const EFFORTS: { id: string; label: string }[] = [
   { id: "xhigh", label: "Molto alto" },
   { id: "max", label: "Massimo" },
 ];
-// Unified "mode" switch (replaces the separate plan toggle): maps to permissionMode.
-const MODES: { id: string; label: string }[] = [
-  { id: "default", label: "Manuale" },
-  { id: "acceptEdits", label: "Auto-edit" },
-  { id: "plan", label: "Plan" },
-  { id: "bypassPermissions", label: "Auto ⚠" },
+// Unified "mode" switch (maps to the SDK's 4 permissionMode values). Labels + help
+// mirror Claude Code: default asks each time, acceptEdits auto-accepts file edits,
+// plan is read-only, bypass runs everything without asking.
+const MODES: { id: string; label: string; help: string }[] = [
+  { id: "default", label: "Chiedi conferma", help: "Chiede conferma prima di ogni azione non pre-approvata (come Claude Code “normale”)." },
+  { id: "acceptEdits", label: "Accetta modifiche", help: "Applica le modifiche ai file senza chiedere; chiede ancora per comandi/altri strumenti." },
+  { id: "plan", label: "Piano (sola lettura)", help: "Analizza e propone un piano senza eseguire modifiche." },
+  { id: "bypassPermissions", label: "Nessuna conferma ⚠", help: "Esegue qualsiasi strumento senza chiedere. Usa con cautela." },
 ];
 
 function mergeCommands(sdk: AvailableCommand[]): AvailableCommand[] {
@@ -765,6 +757,49 @@ function uriToMention(entry: string): string | null {
 }
 
 /** Footer usage button: quick glance (weekly %) + click opens the full panel. */
+// Quick-actions bar: a curated primary row + a "Mostra altro" overflow.
+function QuickBar({
+  actions,
+  chatId,
+  disabled,
+}: {
+  actions: QuickAction[];
+  chatId: string;
+  disabled: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  // Built-ins carry `primary`; user-defined actions (no flag) are always shown.
+  const primary = actions.filter((a) => a.primary || a.primary === undefined);
+  const extra = actions.filter((a) => a.primary === false);
+  const shown = expanded ? [...primary, ...extra] : primary;
+  const run = (a: QuickAction) =>
+    vscode.postMessage({ type: "send", chatId, text: a.prompt });
+  return (
+    <div className="quick-bar" title="Azioni rapide (eseguite da Claude nella cartella della chat)">
+      {shown.map((a) => (
+        <button
+          key={a.label}
+          className="quick-btn"
+          title={a.title}
+          disabled={disabled}
+          onClick={() => run(a)}
+        >
+          {a.label}
+        </button>
+      ))}
+      {extra.length > 0 && (
+        <button
+          className="quick-btn quick-more"
+          title={expanded ? "Mostra meno azioni" : `Altre ${extra.length} azioni`}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Mostra meno ▴" : `Mostra altro ▾`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function UsageButton({
   limits,
   chatId,
@@ -846,6 +881,84 @@ function UsageButton({
       )}
     </div>
   );
+}
+
+// MCP servers + connection status, mirroring Claude Code's /mcp view.
+function McpButton({ servers }: { servers?: ChatSnapshot["mcpServers"] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const list = servers ?? [];
+  const bad = list.filter((s) => mcpDot(s.status) === "red").length;
+  const pending = list.filter((s) => mcpDot(s.status) === "warn").length;
+  // Button badge: connected count, with a color hint if anything is off.
+  const badgeClass = bad ? "err" : pending ? "warn" : list.length ? "ok" : "";
+  const manage = () => vscode.postMessage({ type: "manageMcp" });
+
+  return (
+    <div className="usage-wrap" ref={ref}>
+      <button
+        className={`hbtn mcp-btn ${badgeClass}`}
+        title="Server MCP e stato connessione"
+        onClick={() => setOpen((v) => !v)}
+      >
+        🧩 {list.length || "0"}
+      </button>
+      {open && (
+        <div className="usage-panel mcp-panel">
+          <div className="usage-panel-head">
+            Server MCP
+            <button className="usage-refresh" title="Gestisci / aggiungi" onClick={manage}>
+              ＋
+            </button>
+          </div>
+          {list.length === 0 ? (
+            <div className="usage-empty">
+              Nessun server MCP in questa cartella. Aggiungine uno al{" "}
+              <code>.mcp.json</code>, poi riavvia la chat per caricarlo.
+            </div>
+          ) : (
+            <div className="mcp-list">
+              {list.map((s) => (
+                <div className="mcp-row" key={s.name}>
+                  <span className={`mcp-dot ${mcpDot(s.status)}`} />
+                  <span className="mcp-name">{s.name}</span>
+                  <span className="mcp-status">{mcpLabel(s.status)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button className="mcp-manage" onClick={manage}>
+            Gestisci server MCP…
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Map SDK MCP status → dot color class.
+function mcpDot(status: string): "ok" | "warn" | "red" {
+  const s = status.toLowerCase();
+  if (s === "connected") return "ok";
+  if (s.includes("auth") || s === "pending" || s === "connecting") return "warn";
+  return "red"; // failed / disabled / needs-auth-error / unknown
+}
+function mcpLabel(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "connected") return "connesso";
+  if (s === "pending" || s === "connecting") return "in connessione…";
+  if (s.includes("auth")) return "richiede login";
+  if (s === "failed") return "errore";
+  return status;
 }
 
 function resetIn(ms: number): string {
@@ -955,6 +1068,45 @@ function Row({
   }
 }
 
+/** Warning banner above the composer when a plan usage window is running high
+ *  (like Claude Code's "You've used 90% of your weekly limit"). Dismissible. */
+function UsageAlert({
+  limits,
+  chatId,
+}: {
+  limits: ChatSnapshot["limits"];
+  chatId: string;
+}) {
+  const [dismissed, setDismissed] = useState(false);
+  if (!limits?.available || !limits.windows.length) return null;
+  const top = [...limits.windows].sort((a, b) => b.utilization - a.utilization)[0];
+  if (!top || top.utilization < 80) return null;
+  if (dismissed) return null;
+  const crit = top.utilization >= 90;
+  const reset = top.resetsAtMs ? ` · reset tra ${resetIn(top.resetsAtMs)}` : "";
+  return (
+    <div className={`usage-alert ${crit ? "crit" : "warn"}`}>
+      <span className="usage-alert-text">
+        Hai usato <b>{top.utilization}%</b> del limite {top.label.toLowerCase()}
+        {reset}
+      </span>
+      <button
+        className="usage-alert-link"
+        onClick={() => vscode.postMessage({ type: "refreshUsage", chatId })}
+      >
+        Aggiorna
+      </button>
+      <button
+        className="usage-alert-x"
+        title="Nascondi"
+        onClick={() => setDismissed(true)}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 /** Context-window meter (footer). */
 function ContextMeter({ tokens, window: win }: { tokens?: number; window?: number }) {
   if (tokens == null || !win || win <= 0) return null;
@@ -972,6 +1124,27 @@ function ContextMeter({ tokens, window: win }: { tokens?: number; window?: numbe
         ctx {pct}% · {fmt(tokens)}/{fmt(win)}
       </span>
     </span>
+  );
+}
+
+/** Live extended-reasoning, streamed before the answer. Auto-expanded, tail-followed. */
+function LiveThinking({ text }: { text: string }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="cc-block thinking live">
+      <div className="cc-gutter">✻</div>
+      <div className="cc-body">
+        <button className="think-toggle" onClick={() => setOpen((v) => !v)}>
+          {open ? "▾" : "▸"} <span className="think-pulse">Sta ragionando…</span>
+        </button>
+        {open && (
+          <div className="think-body">
+            <Markdown text={text} />
+            <span className="caret" />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

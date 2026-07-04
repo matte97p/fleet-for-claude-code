@@ -2,7 +2,7 @@
   "name": "claude-fleet",
   "displayName": "Fleet for Claude Code",
   "description": "Unofficial multi-session manager for Claude Code — run and monitor N concurrent chats from one panel. Not affiliated with Anthropic.",
-  "version": "0.0.7",
+  "version": "0.0.18",
   "publisher": "matte97p",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -30,7 +30,9 @@
     "AI"
   ],
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onWebviewPanel:claudeFleet.chat"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -132,13 +134,34 @@
         }
       ],
       "commandPalette": [
-        { "command": "claudeFleet.renameItem", "when": "false" },
-        { "command": "claudeFleet.deleteItem", "when": "false" },
-        { "command": "claudeFleet.archiveChat", "when": "false" },
-        { "command": "claudeFleet.unarchiveChat", "when": "false" },
-        { "command": "claudeFleet.deleteFromDisk", "when": "false" },
-        { "command": "claudeFleet.stopChat", "when": "false" },
-        { "command": "claudeFleet.openChat", "when": "false" }
+        {
+          "command": "claudeFleet.renameItem",
+          "when": "false"
+        },
+        {
+          "command": "claudeFleet.deleteItem",
+          "when": "false"
+        },
+        {
+          "command": "claudeFleet.archiveChat",
+          "when": "false"
+        },
+        {
+          "command": "claudeFleet.unarchiveChat",
+          "when": "false"
+        },
+        {
+          "command": "claudeFleet.deleteFromDisk",
+          "when": "false"
+        },
+        {
+          "command": "claudeFleet.stopChat",
+          "when": "false"
+        },
+        {
+          "command": "claudeFleet.openChat",
+          "when": "false"
+        }
       ]
     },
     "configuration": {
@@ -157,22 +180,58 @@
         "claudeFleet.model": {
           "type": "string",
           "default": "",
-          "enum": ["", "claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-fable-5"],
-          "enumItemLabels": ["Default (SDK/subscription default)", "Opus 4.8", "Sonnet 5", "Haiku 4.5", "Fable 5"],
+          "enum": [
+            "",
+            "claude-opus-4-8",
+            "claude-sonnet-5",
+            "claude-haiku-4-5-20251001",
+            "claude-fable-5"
+          ],
+          "enumItemLabels": [
+            "Default (SDK/subscription default)",
+            "Opus 4.8",
+            "Sonnet 5",
+            "Haiku 4.5",
+            "Fable 5"
+          ],
           "markdownDescription": "Model used for **new chats**. Empty = the SDK/subscription default. You can also type any other model id."
         },
         "claudeFleet.defaultEffort": {
           "type": "string",
           "default": "",
-          "enum": ["", "low", "medium", "high", "xhigh", "max"],
-          "enumItemLabels": ["Default", "Low (fastest)", "Medium", "High", "X-High", "Max (deepest)"],
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "enumItemLabels": [
+            "Default",
+            "Low (fastest)",
+            "Medium",
+            "High",
+            "X-High",
+            "Max (deepest)"
+          ],
           "markdownDescription": "Default reasoning **effort** for new chats. Higher = deeper reasoning, slower. Empty = SDK default."
         },
         "claudeFleet.defaultPermissionMode": {
           "type": "string",
           "default": "default",
-          "enum": ["default", "acceptEdits", "plan", "dontAsk", "bypassPermissions"],
-          "enumItemLabels": ["Ask before actions (default)", "Auto-accept file edits", "Plan mode (read-only)", "Don't ask (deny if not pre-approved)", "Bypass all permissions ⚠"],
+          "enum": [
+            "default",
+            "acceptEdits",
+            "plan",
+            "bypassPermissions"
+          ],
+          "enumItemLabels": [
+            "Ask before actions (default)",
+            "Auto-accept file edits",
+            "Plan mode (read-only)",
+            "Bypass all permissions ⚠"
+          ],
           "markdownDescription": "Default **permission mode** for new chats. `bypassPermissions` runs tools without asking — use with care."
         },
         "claudeFleet.sound.enabled": {
@@ -190,7 +249,15 @@
         "claudeFleet.sound.permission": {
           "type": "string",
           "default": "ping",
-          "enum": ["ping", "chime", "blip", "marimba", "knock", "custom", "none"],
+          "enum": [
+            "ping",
+            "chime",
+            "blip",
+            "marimba",
+            "knock",
+            "custom",
+            "none"
+          ],
           "enumDescriptions": [
             "Two rising notes (default)",
             "Gentle two-tone chime",
@@ -205,7 +272,15 @@
         "claudeFleet.sound.done": {
           "type": "string",
           "default": "chime",
-          "enum": ["ping", "chime", "blip", "marimba", "knock", "custom", "none"],
+          "enum": [
+            "ping",
+            "chime",
+            "blip",
+            "marimba",
+            "knock",
+            "custom",
+            "none"
+          ],
           "enumDescriptions": [
             "Two rising notes",
             "Gentle two-tone chime (default)",
@@ -233,11 +308,23 @@
           "markdownDescription": "Custom quick-action buttons shown above the composer, merged with the built-ins (a custom action with the same `label` overrides the built-in). Each item: `{ \"label\": \"...\", \"prompt\": \"...\", \"title\": \"...\" }`. The `prompt` is sent to the chat and runs in its repo folder.",
           "items": {
             "type": "object",
-            "required": ["label", "prompt"],
+            "required": [
+              "label",
+              "prompt"
+            ],
             "properties": {
-              "label": { "type": "string", "description": "Button text" },
-              "prompt": { "type": "string", "description": "Prompt sent to the chat" },
-              "title": { "type": "string", "description": "Optional tooltip" }
+              "label": {
+                "type": "string",
+                "description": "Button text"
+              },
+              "prompt": {
+                "type": "string",
+                "description": "Prompt sent to the chat"
+              },
+              "title": {
+                "type": "string",
+                "description": "Optional tooltip"
+              }
             }
           }
         }
@@ -252,7 +339,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "npm run build && vsce package --no-dependencies"
+    "package": "npm run build && vsce package"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.200"

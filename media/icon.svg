@@ -5,23 +5,23 @@
       <stop offset="1" stop-color="#161619"/>
     </linearGradient>
     <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6ea8ff"/>
+      <stop offset="0" stop-color="#8ab4ff"/>
       <stop offset="1" stop-color="#7b5bd6"/>
     </linearGradient>
   </defs>
-  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect width="256" height="256" rx="58" fill="url(#bg)"/>
+  <!-- 4-point sparkle: concave-diamond arms radiating from center -->
   <g fill="url(#spark)">
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(0 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(30 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(60 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(90 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(120 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(150 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(180 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(210 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(240 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(270 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(300 128 128)"/>
-    <rect x="120" y="40" width="16" height="62" rx="8" transform="rotate(330 128 128)"/>
+    <path d="M128 42
+             C132 96 160 124 214 128
+             C160 132 132 160 128 214
+             C124 160 96 132 42 128
+             C96 124 124 96 128 42 Z"/>
+    <!-- small secondary sparkle, top-right, for depth -->
+    <path d="M196 60
+             C198 78 210 90 228 92
+             C210 94 198 106 196 124
+             C194 106 182 94 164 92
+             C182 90 194 78 196 60 Z" opacity="0.55"/>
   </g>
 </svg>

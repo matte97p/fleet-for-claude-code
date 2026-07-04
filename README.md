@@ -13,6 +13,25 @@ It uses the **[Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/cla
 under the hood — the same engine as Claude Code — so you get real tools, permissions,
 skills and MCP, not a reimplementation.
 
+## Demo
+
+![How it works](https://raw.githubusercontent.com/matte97p/fleet-for-claude-code/main/media/how-it-works.gif)
+
+## Screenshots
+
+<!--
+  To add the images: capture them from the running extension (⌘⇧4 on macOS),
+  save the PNGs under media/screenshots/ with the exact names below, then commit +
+  push. The URLs are ABSOLUTE raw.githubusercontent.com links (pointing at `main`)
+  on purpose — the VS Code Marketplace does NOT resolve relative image paths, so
+  relative links would render on GitHub but break on the Marketplace listing.
+-->
+
+| | |
+|---|---|
+| **Sessions panel** — live status per chat<br>![Sessions panel](https://raw.githubusercontent.com/matte97p/fleet-for-claude-code/main/media/screenshots/sessions.png) | **Chat view** — streaming, rich markdown, tools<br>![Chat view](https://raw.githubusercontent.com/matte97p/fleet-for-claude-code/main/media/screenshots/chat.png) |
+| **Model / reasoning / mode** selectors<br>![Selectors](https://raw.githubusercontent.com/matte97p/fleet-for-claude-code/main/media/screenshots/selectors.png) | **Usage & MCP** — plan usage + MCP status<br>![Usage and MCP](https://raw.githubusercontent.com/matte97p/fleet-for-claude-code/main/media/screenshots/usage-mcp.png) |
+
 ## Auth: uses your Claude subscription (not API billing)
 
 The extension deliberately **removes `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN`** from
@@ -38,8 +57,9 @@ src/
     AuthPreflight.ts   strips API key, locates a claude binary
   extension/
     extension.ts       activation, commands, rehydrate persisted chats on startup
-    FolderStore.ts     folders + chat metadata persisted in workspaceState
-    TreeProvider.ts     sidebar tree with live status badges
+    FolderStore.ts     folders + chat metadata persisted in globalState
+                       (survives across windows/workspaces; migrates old workspaceState)
+    SidebarProvider.ts  sidebar webview with live status badges
     ChatPanel.ts       webview host: binds the selected chat, relays messages
 webview/               React + Vite chat UI (transcript, streaming, permission cards)
 shared/protocol.ts     wire types shared by extension host and webview

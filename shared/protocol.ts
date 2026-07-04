@@ -108,12 +108,24 @@ export interface FileMatch {
 
 /** Reasoning effort levels supported by the SDK. */
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
+// The four modes the Agent SDK actually accepts (setPermissionMode / options).
 export type PermissionMode =
   | "default"
   | "acceptEdits"
   | "plan"
-  | "dontAsk"
   | "bypassPermissions";
+
+/** One MCP server's connection status, as reported by the SDK init message. */
+export type McpConnStatus =
+  | "connected"
+  | "pending"
+  | "needs-auth"
+  | "failed"
+  | string;
+export interface McpServerInfo {
+  name: string;
+  status: McpConnStatus;
+}
 
 /** Per-chat, user-tunable configuration. */
 export interface ChatConfig {
@@ -166,6 +178,9 @@ export interface QuickAction {
   label: string; // button text (also the merge key)
   prompt: string; // prompt sent to the chat when the button is clicked
   title?: string; // optional tooltip
+  /** Shown in the always-visible row. Others live behind "Mostra altro".
+   *  User-defined actions (claudeFleet.quickActions) are treated as primary. */
+  primary?: boolean;
 }
 
 /** Local slash commands handled by Claude Fleet itself (not sent as text). */
@@ -182,6 +197,7 @@ export interface ChatSnapshot {
   transcript: TranscriptItem[];
   pendingPermission?: PendingPermission;
   streamingText?: string; // partial assistant text mid-turn
+  streamingThinking?: string; // partial extended-reasoning text mid-turn (before/with the answer)
   /** Short human phrase describing what the chat is doing right now. */
   activity?: string;
   config: ChatConfig;
@@ -199,6 +215,8 @@ export interface ChatSnapshot {
   contextTokens?: number;
   /** The model's context window (e.g. 200000, 1000000). */
   contextWindow?: number;
+  /** MCP servers configured for this chat + their connection status (from init). */
+  mcpServers?: McpServerInfo[];
 }
 
 // ===== Chat panel protocol =====
@@ -218,6 +236,7 @@ export type WebviewToHost =
   | { type: "openDiff"; chatId: string; path: string }
   | { type: "searchFiles"; query: string; requestId: number }
   | { type: "openExternal"; url: string }
+  | { type: "clientError"; message: string } // webview-side uncaught error, for diagnostics
   | { type: "slash"; chatId: string; command: LocalSlashCommand; args?: string }
   | {
       type: "permission";
@@ -346,32 +365,33 @@ export type HostToDashboard = { type: "dashboard"; data: DashboardData };
  *  host (ChatPanel) as the base it merges claudeFleet.quickActions onto before
  *  sending the "quickActions" message. */
 export const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
-  { label: "Commit", title: "Commit delle modifiche con messaggio generato",
-    prompt: "Fai il commit delle modifiche correnti. Mostra prima `git status` e `git diff --stat`, poi committa con un messaggio conciso in stile Conventional Commits. Non fare push." },
-  { label: "Commit + Push", title: "Commit e push sul branch corrente",
+  // --- Primary: always visible (frequent, low-risk, self-explanatory) ---
+  { label: "Commit + Push", primary: true, title: "Committa le modifiche e fa push sul branch corrente (crea un branch se sei su main)",
     prompt: "Fai il commit delle modifiche correnti con un buon messaggio (Conventional Commits) e poi esegui il push sul branch corrente. Se il branch è main/master, crea prima un branch di feature." },
-  { label: "PR", title: "Apri una Pull Request con gh",
+  { label: "Apri PR", primary: true, title: "Apre una Pull Request con gh (titolo e descrizione dai commit del branch)",
     prompt: "Apri una Pull Request con `gh pr create`: genera titolo e descrizione a partire dai commit e dal diff del branch corrente rispetto al branch base. Riportami l'URL della PR." },
-  { label: "Test", title: "Esegui i test del progetto",
-    prompt: "Esegui i test del progetto (rileva il runner: npm/pnpm/pytest/uv, ecc.) e riportami i risultati. Se qualcosa fallisce, proponi i fix." },
-  { label: "Review", title: "Rivedi le modifiche correnti",
+  { label: "Rivedi diff", primary: true, title: "Rivede le modifiche non committate (git diff) e segnala bug/rischi/migliorie",
     prompt: "Rivedi le mie modifiche correnti (`git diff`): segnala bug, rischi, e migliorie concrete. Sii sintetico e ordina per gravità." },
-  { label: "Linear", title: "Aggiorna l'issue Linear collegata",
+  { label: "Esegui test", primary: true, title: "Rileva il runner (npm/pnpm/pytest/uv…) ed esegue i test, poi propone i fix se falliscono",
+    prompt: "Esegui i test del progetto (rileva il runner: npm/pnpm/pytest/uv, ecc.) e riportami i risultati. Se qualcosa fallisce, proponi i fix." },
+  { label: "Aggiorna Linear", primary: true, title: "Aggiorna l'issue Linear collegata (stato + commento) via MCP; chiede l'ID se ambiguo",
     prompt: "Aggiorna l'issue Linear collegata a questo lavoro usando gli strumenti Linear (MCP): imposta lo stato appropriato e aggiungi un commento che riassume cosa è stato fatto. Se non è chiaro quale issue, chiedimi l'ID." },
-  { label: "Riassumi", title: "Riassumi la conversazione",
+  { label: "Riassumi chat", primary: true, title: "Riassume QUESTA conversazione: cosa fatto, decisioni, prossimi passi",
     prompt: "Riassumi questa conversazione in punti chiave: cosa è stato fatto, decisioni prese, e prossimi passi." },
-  { label: "Cosa è cambiato", title: "git status + git diff --stat",
+
+  // --- Secondary: behind "Mostra altro" (meno frequenti, più pesanti o rischiose) ---
+  { label: "Commit (no push)", primary: false, title: "Committa in locale senza fare push",
+    prompt: "Fai il commit delle modifiche correnti. Mostra prima `git status` e `git diff --stat`, poi committa con un messaggio conciso in stile Conventional Commits. Non fare push." },
+  { label: "Cosa è cambiato", primary: false, title: "Mostra git status + git diff --stat e riassume le modifiche in corso",
     prompt: "Mostrami cosa è cambiato nel repo: esegui `git status` e `git diff --stat`, poi riassumi in breve le modifiche in corso." },
-  { label: "Crea branch", title: "Crea un nuovo branch git",
-    prompt: "Crea un nuovo branch git con un nome sensato per il lavoro corrente e spostati su di esso. Se non è chiaro quale nome usare, chiedimelo prima di crearlo." },
-  { label: "Scrivi test", title: "Scrivi test per il file più rilevante",
+  { label: "Scrivi test", primary: false, title: "Scrive i test per il file più rilevante alle modifiche (chiede se ambiguo) e li esegue",
     prompt: "Scrivi i test per il file più rilevante alle modifiche correnti (se non è chiaro quale, chiedimelo), seguendo le convenzioni di test già presenti nel repo, poi eseguili." },
-  { label: "Aggiorna CLAUDE.md", title: "Aggiorna o genera CLAUDE.md",
+  { label: "Crea branch", primary: false, title: "Crea un nuovo branch git per il lavoro corrente (chiede il nome se ambiguo)",
+    prompt: "Crea un nuovo branch git con un nome sensato per il lavoro corrente e spostati su di esso. Se non è chiaro quale nome usare, chiedimelo prima di crearlo." },
+  { label: "Aggiorna CLAUDE.md", primary: false, title: "Aggiorna/crea il CLAUDE.md del repo (mostra prima il diff proposto)",
     prompt: "Aggiorna (o crea, se manca) il file CLAUDE.md di questo repo con un riassunto aggiornato di architettura, comandi e convenzioni del progetto. Mostrami prima un diff di cosa cambieresti." },
-  { label: "Continua", title: "Riprendi il lavoro da dove eravamo",
-    prompt: "Continua il compito precedente da dove eravamo rimasti. Se non è chiaro quale fosse, riepiloga cosa stavamo facendo e chiedimi conferma prima di procedere." },
-  { label: "Applica Terraform", title: "Terraform/Terragrunt: plan → conferma → apply (distruttivo)",
-    prompt: "Applica l'infrastruttura Terraform di questo repo. IMPORTANTE, in ordine: 1) esegui prima il PLAN (usa `terragrunt` se il repo lo usa, altrimenti `terraform`); 2) MOSTRAMI il piano completo; 3) attendi la mia conferma esplicita; 4) SOLO dopo il mio ok esegui l'apply. È un'operazione distruttiva: non applicare mai nulla senza il piano e la mia conferma." },
-  { label: "Aggiorna memoria", title: "Persisti fatti e decisioni nella memoria del progetto",
+  { label: "Aggiorna memoria", primary: false, title: "Salva i fatti/decisioni di questa chat nella memoria del progetto (ti mostra cosa aggiunge)",
     prompt: "Aggiorna la memoria persistente del progetto: individua i fatti chiave, le decisioni e lo stato emersi in questa conversazione e salvali nel posto giusto (CLAUDE.md, file in .claude/, o le note di memoria del progetto), così restano disponibili nelle sessioni future. Mostrami cosa hai aggiunto." },
+  { label: "Applica Terraform ⚠", primary: false, title: "plan → ti mostra il piano → attende il tuo OK → apply. Operazione distruttiva.",
+    prompt: "Applica l'infrastruttura Terraform di questo repo. IMPORTANTE, in ordine: 1) esegui prima il PLAN (usa `terragrunt` se il repo lo usa, altrimenti `terraform`); 2) MOSTRAMI il piano completo; 3) attendi la mia conferma esplicita; 4) SOLO dopo il mio ok esegui l'apply. È un'operazione distruttiva: non applicare mai nulla senza il piano e la mia conferma." },
 ];

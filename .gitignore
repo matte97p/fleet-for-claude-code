@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.vsix
 .DS_Store
+# large source recording (the optimized GIF is what ships in the README)
+media/*.mov
+# local-only diagnostics / one-off recovery data
+.old-chats-backup.json
+.claude-fleet-webview.log

@@ -106,7 +106,12 @@ function ListItemView({ item }: { item: ListItem }) {
 /**
  * Highlighted fenced-code body. `html` is produced solely by highlight() and is
  * always HTML-escaped (see highlight.ts) — the dangerouslySetInnerHTML below is
- * the one sanctioned use in this file. memo + useMemo keep streaming cheap.
+ * the one sanctioned use in this file.
+ *
+ * Highlighting runs AFTER paint (idle callback), not synchronously in render:
+ * seeding a long restored transcript would otherwise highlight every code block
+ * in one blocking commit and freeze the whole window (webviews share the main
+ * renderer). Until it runs we show plain, escaped code (React-escaped child).
  */
 const HighlightedCode = React.memo(function HighlightedCode({
   code,
@@ -115,13 +120,32 @@ const HighlightedCode = React.memo(function HighlightedCode({
   code: string;
   lang: string;
 }) {
-  const { html, language } = React.useMemo(() => highlight(code, lang), [code, lang]);
+  const [done, setDone] = React.useState<{ html: string; language: string } | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      const r = highlight(code, lang);
+      if (!cancelled) setDone(r);
+    };
+    const ric: any = (window as any).requestIdleCallback;
+    const id = ric ? ric(run, { timeout: 500 }) : setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      const cic: any = (window as any).cancelIdleCallback;
+      if (ric && cic) cic(id);
+      else clearTimeout(id as any);
+    };
+  }, [code, lang]);
   return (
     <pre className="md-code">
-      <code
-        className={language ? `hljs language-${language}` : "hljs"}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      {done ? (
+        <code
+          className={done.language ? `hljs language-${done.language}` : "hljs"}
+          dangerouslySetInnerHTML={{ __html: done.html }}
+        />
+      ) : (
+        <code className="hljs">{code}</code>
+      )}
     </pre>
   );
 });
@@ -337,16 +361,20 @@ function cellAlign(cell: string): Align {
 // Inline formatting: `code`, **bold**, *italic*, [text](url). No HTML injection.
 // ---------------------------------------------------------------------------
 
-const INLINE_RE =
-  /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_]+_|\[[^\]]+\]\([^)\s]+\))/g;
+const INLINE_PATTERN =
+  "(`[^`]+`|\\*\\*[^*]+\\*\\*|\\*[^*\\s][^*]*\\*|_[^_]+_|\\[[^\\]]+\\]\\([^)\\s]+\\))";
 
 function inline(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
   let m: RegExpExecArray | null;
-  INLINE_RE.lastIndex = 0;
-  while ((m = INLINE_RE.exec(text))) {
+  // A FRESH regex per call: inline() recurses for **bold**/*italic*, and a
+  // shared module-level /g regex would have its lastIndex reset by the inner
+  // call, making the outer loop rescan from 0 and match the same token forever
+  // → out-of-memory crash (dead grey webview). Each level needs its own state.
+  const re = new RegExp(INLINE_PATTERN, "g");
+  while ((m = re.exec(text))) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
     const tok = m[0];
     if (tok.startsWith("`")) {

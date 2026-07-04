@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import type { SessionManager } from "../core/SessionManager";
 import type { ChatSession } from "../core/ChatSession";
 import type { FolderStore } from "./FolderStore";
@@ -12,6 +14,9 @@ import type {
 } from "../../shared/protocol";
 import { DEFAULT_QUICK_ACTIONS } from "../../shared/protocol";
 
+/** globalState key: the chat id last shown by the panel, for restore-after-reload. */
+const LAST_CHAT_KEY = "claudeFleet.lastChatId";
+
 /**
  * One reusable webview panel that shows the currently-selected chat. Selecting
  * a different chat in the tree swaps which session this panel is bound to.
@@ -23,10 +28,36 @@ export class ChatPanel {
   static setFocusListener(fn: (chatId: string) => void): void {
     ChatPanel.onFocusChat = fn;
   }
+
+  /**
+   * Register a serializer so a chat panel restored by VS Code after a window
+   * reload comes back alive instead of as a dead grey shell. Without this,
+   * VS Code re-creates the editor tab (title and all) but the webview it hands
+   * back is a dead shell whose iframe won't reliably re-render our HTML. Rather
+   * than adopt that fragile shell (which then poisons every later open, since
+   * the panel is a singleton), we simply **dispose** it: the stale tab closes on
+   * reload and the next chat click builds a fresh, working panel. Call once
+   * during activation. Registering a serializer at all is what stops VS Code
+   * from leaving an un-owned grey editor behind.
+   */
+  static register(
+    _ctx: vscode.ExtensionContext,
+    _sessions: SessionManager,
+    _store: FolderStore
+  ): vscode.Disposable {
+    return vscode.window.registerWebviewPanelSerializer("claudeFleet.chat", {
+      async deserializeWebviewPanel(panel) {
+        panel.dispose();
+      },
+    });
+  }
   private panel: vscode.WebviewPanel;
   private boundChatId?: string;
   private updateSub?: () => void;
   private disposables: vscode.Disposable[] = [];
+  /** Coalesced-patch state: batch rapid session updates into one post per frame. */
+  private patchTimer?: ReturnType<typeof setTimeout>;
+  private pendingSnap?: any;
 
   static show(
     ctx: vscode.ExtensionContext,
@@ -59,20 +90,26 @@ export class ChatPanel {
   private constructor(
     private ctx: vscode.ExtensionContext,
     private sessions: SessionManager,
-    private store: FolderStore
+    private store: FolderStore,
+    existing?: vscode.WebviewPanel
   ) {
-    this.panel = vscode.window.createWebviewPanel(
-      "claudeFleet.chat",
-      "Claude Fleet",
-      vscode.ViewColumn.Active,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [
-          vscode.Uri.joinPath(ctx.extensionUri, "dist", "webview"),
-        ],
-      }
-    );
+    const localResourceRoots = [
+      vscode.Uri.joinPath(ctx.extensionUri, "dist", "webview"),
+    ];
+    if (existing) {
+      // Adopt a panel VS Code restored after a window reload. Re-apply the
+      // webview options (a restored shell comes back with scripts disabled and
+      // no resource roots) so it isn't a dead grey panel.
+      this.panel = existing;
+      this.panel.webview.options = { enableScripts: true, localResourceRoots };
+    } else {
+      this.panel = vscode.window.createWebviewPanel(
+        "claudeFleet.chat",
+        "Claude Fleet",
+        vscode.ViewColumn.Active,
+        { enableScripts: true, retainContextWhenHidden: true, localResourceRoots }
+      );
+    }
     this.panel.webview.html = this.html();
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage(
@@ -94,10 +131,20 @@ export class ChatPanel {
       })
     );
 
-    // React to live session updates for whichever chat is bound.
+    // React to live session updates for whichever chat is bound. Coalesce
+    // bursts (e.g. a resume emitting many updates) into one post per frame so
+    // the webview never gets flooded into a freeze.
     const listener = (snap: any) => {
       if (snap.id === this.boundChatId) {
-        this.post({ type: "patch", chat: snap });
+        this.pendingSnap = snap;
+        if (!this.patchTimer) {
+          this.patchTimer = setTimeout(() => {
+            this.patchTimer = undefined;
+            const s = this.pendingSnap;
+            this.pendingSnap = undefined;
+            if (s && s.id === this.boundChatId) this.post({ type: "patch", chat: s });
+          }, 40);
+        }
         // Keep persisted sessionId fresh so we can resume after a restart.
         if (snap.sessionId) {
           void this.store.updateChat(snap.id, { sessionId: snap.sessionId });
@@ -112,6 +159,9 @@ export class ChatPanel {
 
   private bind(chatId: string): void {
     this.boundChatId = chatId;
+    // Remember which chat this panel showed, so we can rebind it if VS Code
+    // restores the panel after a window reload (see ChatPanel.register).
+    void this.ctx.globalState.update(LAST_CHAT_KEY, chatId);
     const session = this.sessions.get(chatId);
     const meta = this.store.getChat(chatId);
     this.panel.title = meta?.title ? `Claude — ${meta.title}` : "Claude Fleet";
@@ -121,7 +171,7 @@ export class ChatPanel {
       this.post({ type: "open", chat: session.snapshot() });
       // Lazily reconstruct history from disk for imported/resumed chats.
       if (session.needsHistory) {
-        void loadTranscript(session.sessionId!, { maxItems: 400 })
+        void loadTranscript(session.sessionId!, { maxItems: 120 })
           .then((items) => {
             // The chat may have been re-bound while loading; guard on identity.
             if (this.boundChatId === chatId) session.seedTranscript(items);
@@ -176,6 +226,17 @@ export class ChatPanel {
       }
       case "openDiff": {
         void this.openDiff(m.chatId, m.path);
+        break;
+      }
+      case "clientError": {
+        // Webview reported an uncaught error — log it to a file for diagnosis.
+        try {
+          const line = `[${new Date().toISOString()}] chat=${this.boundChatId ?? "?"} ${m.message}\n`;
+          fs.appendFileSync(path.join(os.homedir(), ".claude-fleet-webview.log"), line);
+        } catch {
+          /* ignore */
+        }
+        console.error("[claude-fleet webview]", m.message);
         break;
       }
       case "permission": {
@@ -372,6 +433,14 @@ export class ChatPanel {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="${styleUri}" />
   <title>Claude Fleet</title>
+  <style nonce="${nonce}">
+    html, body { background: var(--vscode-editor-background); color: var(--vscode-foreground); }
+    #root:empty::after {
+      content: "Caricamento…"; display: flex; height: 100vh;
+      align-items: center; justify-content: center; opacity: 0.5;
+      font-family: var(--vscode-font-family); font-size: 13px;
+    }
+  </style>
 </head>
 <body>
   <div id="root"></div>
@@ -382,6 +451,7 @@ export class ChatPanel {
 
   private dispose(): void {
     ChatPanel.current = undefined;
+    if (this.patchTimer) clearTimeout(this.patchTimer);
     while (this.disposables.length) this.disposables.pop()?.dispose();
     this.panel.dispose();
   }

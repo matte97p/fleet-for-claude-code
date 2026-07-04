@@ -1,16 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-  <g>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(0 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(30 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(60 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(90 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(120 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(150 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(180 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(210 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(240 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(270 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(300 12 12)"/>
-    <rect x="11" y="2.4" width="2" height="6.2" rx="1" transform="rotate(330 12 12)"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor">
+  <!-- 4-point sparkle (matches the marketplace icon), monochrome for the activity bar -->
+  <path d="M128 34
+           C133 100 156 123 222 128
+           C156 133 133 156 128 222
+           C123 156 100 133 34 128
+           C100 123 123 100 128 34 Z"/>
 </svg>

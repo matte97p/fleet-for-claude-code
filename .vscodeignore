@@ -9,3 +9,8 @@ tsconfig.json
 vite.config.ts
 .gitignore
 scratchpad/**
+scripts/**
+media/**/*.mov
+media/screenshots/README.md
+.old-chats-backup.json
+.claude-fleet-webview.log

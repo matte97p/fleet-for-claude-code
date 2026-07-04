@@ -18,6 +18,7 @@ import type {
   TodoEntry,
   FileEditOp,
   AvailableCommand,
+  McpServerInfo,
   RateLimits,
 } from "../../shared/protocol";
 import {
@@ -79,6 +80,7 @@ export class ChatSession extends EventEmitter {
   private status: ChatStatus = "idle";
   private transcript: TranscriptItem[] = [];
   private streamingText = "";
+  private streamingThinking = "";
   private pending?: PendingPermission;
   private activity?: string;
   /** todoBlockId of the current live TodoWrite checklist (replace-in-place). */
@@ -87,6 +89,8 @@ export class ChatSession extends EventEmitter {
   private availableCommands: AvailableCommand[] = [];
   /** Subscription rate limits captured from the SDK init message. */
   private limits?: RateLimits;
+  /** MCP servers + connection status, captured from the SDK init message. */
+  private mcpServers: McpServerInfo[] = [];
   /** Context-window meter (latest turn). */
   private contextTokens?: number;
   private contextWindow?: number;
@@ -153,6 +157,7 @@ export class ChatSession extends EventEmitter {
       transcript: this.transcript,
       pendingPermission: this.pending,
       streamingText: this.streamingText || undefined,
+      streamingThinking: this.streamingThinking || undefined,
       activity: this.activity,
       config: this.config,
       usage: this.usage,
@@ -162,6 +167,7 @@ export class ChatSession extends EventEmitter {
       canRewind: true,
       contextTokens: this.contextTokens,
       contextWindow: this.contextWindow,
+      mcpServers: this.mcpServers,
     };
   }
 
@@ -217,6 +223,7 @@ export class ChatSession extends EventEmitter {
     }
     this.q = undefined;
     this.streamingText = "";
+    this.streamingThinking = "";
     this.pending = undefined;
     this.activity = undefined;
     this.setStatus("idle");
@@ -343,6 +350,7 @@ export class ChatSession extends EventEmitter {
     this.sessionId = undefined;
     this.transcript = [];
     this.streamingText = "";
+    this.streamingThinking = "";
     this.pending = undefined;
     this.activity = undefined;
     this.todoBlockId = undefined;
@@ -558,6 +566,14 @@ export class ChatSession extends EventEmitter {
         if (subtype === "init") {
           this.sessionId = (msg as any).session_id;
           if (!this.model) this.model = (msg as any).model;
+          // MCP servers + their connection status (connected / failed / needs-auth / pending).
+          const mcp = (msg as any).mcp_servers;
+          if (Array.isArray(mcp)) {
+            this.mcpServers = mcp.map((s: any) => ({
+              name: String(s?.name ?? "?"),
+              status: String(s?.status ?? "pending"),
+            }));
+          }
           // supportedCommands() is only valid in streaming mode AFTER init.
           void this.fetchCommands();
           // Fetch plan usage (session/week windows) shortly after init, then
@@ -644,17 +660,27 @@ export class ChatSession extends EventEmitter {
           this.activity = describeTool(name, input);
         }
         this.streamingText = "";
+        this.streamingThinking = "";
         break;
       }
       case "stream_event":
       case "partial_assistant": {
         // Keep subagent partials out of the main streaming caret.
         if ((msg as any).parent_tool_use_id) return;
-        // Accumulate streamed text deltas for a live "typing" effect.
+        // Extended reasoning streams first as thinking deltas — surface it live
+        // so the user sees Claude is reasoning (not a blank spinner).
+        const think = extractPartialThinking(msg);
+        if (think) {
+          this.streamingThinking += think;
+          this.activity = "sta ragionando…";
+          this.emitUpdate();
+          return;
+        }
+        // Then the answer streams as text deltas — live "typing" effect.
         const delta = extractPartialText(msg);
         if (delta) {
           this.streamingText += delta;
-          this.activity = "thinking…";
+          this.activity = "sta scrivendo…";
           this.emitUpdate();
         }
         return; // avoid double emit below
@@ -695,6 +721,7 @@ export class ChatSession extends EventEmitter {
           this.setStatus("idle");
         }
         this.streamingText = "";
+        this.streamingThinking = "";
         // Notify listeners a turn just completed (for sounds/toasts).
         this.emit("turn-done", this.snapshot());
         break;
@@ -908,5 +935,14 @@ function extractPartialText(msg: SDKMessage): string {
   if (ev?.delta?.type === "text_delta" && ev.delta.text) return ev.delta.text;
   const content = anyMsg.message?.content;
   if (typeof content === "string") return content;
+  return "";
+}
+
+function extractPartialThinking(msg: SDKMessage): string {
+  // Extended-reasoning deltas arrive as thinking_delta events during a turn.
+  const anyMsg = msg as any;
+  const ev = anyMsg.event ?? anyMsg;
+  if (ev?.delta?.type === "thinking_delta" && ev.delta.thinking) return ev.delta.thinking as string;
+  if (typeof ev?.delta?.thinking === "string") return ev.delta.thinking;
   return "";
 }

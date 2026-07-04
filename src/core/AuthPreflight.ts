@@ -43,6 +43,24 @@ export async function buildAuthEnv(
     notes.push("Removed ANTHROPIC_AUTH_TOKEN so the subscription login is used.");
   }
 
+  // Detach our background subprocess from the VS Code IDE integration. If the
+  // `claude` we spawn inherits the IDE-connection vars, it attaches to the
+  // running editor and the official Claude Code extension reacts by opening
+  // Monaco-based diff/lock UI — which, with its web workers failing, spins the
+  // main renderer into an infinite loop and freezes the whole window. Our
+  // sessions must run headless (no IDE attach), so strip those vars.
+  const idePrefixes = ["CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_IDE", "ENABLE_IDE_INTEGRATION"];
+  let strippedIde = false;
+  for (const key of Object.keys(env)) {
+    if (idePrefixes.some((p) => key === p || key.startsWith(p))) {
+      delete env[key];
+      strippedIde = true;
+    }
+  }
+  if (strippedIde) {
+    notes.push("Detached background sessions from the VS Code IDE integration (avoids editor-lock/Monaco conflicts).");
+  }
+
   const claudePath = await resolveClaude(configuredClaudePath, notes);
   return { env, strippedApiKey, claudePath, notes };
 }

@@ -123,6 +123,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // Clear a chat's unseen flag the moment its panel becomes focused.
   ChatPanel.setFocusListener((chatId) => sessions.clearUnseen(chatId));
 
+  // Revive chat panels VS Code restores after a window reload (else grey shell).
+  ctx.subscriptions.push(ChatPanel.register(ctx, sessions, store));
+
   // Rehydrate persisted chats as (idle, resumable) sessions on startup.
   for (const meta of store.chats()) {
     await sessions.create({

@@ -965,10 +965,16 @@ button.allow-always:hover { opacity: 1; }
 .usage-panel {
   position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 40;
   width: 300px; padding: 14px; border-radius: 12px;
-  /* Opaque: menu/editor background so transcript text never bleeds through. */
-  background: var(--vscode-menu-background, var(--vscode-editor-background, #1f1f23));
-  border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border, rgba(128,128,128,0.5)));
-  box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+  /* Bulletproof opaque: a SOLID editor-background base, then the widget bg
+     painted on top. Even if a theme's widget/menu var has alpha, the solid
+     base underneath guarantees no transcript text bleeds through. */
+  background-color: var(--vscode-editor-background, #1f1f23);
+  background-image: linear-gradient(
+    var(--vscode-editorWidget-background, rgba(40,40,46,1)),
+    var(--vscode-editorWidget-background, rgba(40,40,46,1))
+  );
+  border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,0.5));
+  box-shadow: 0 10px 28px rgba(0,0,0,0.6);
   display: flex; flex-direction: column; gap: 14px;
 }
 .usage-panel-head {
@@ -1045,8 +1051,9 @@ button.allow-always:hover { opacity: 1; }
   display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
 }
 .header .hfield > span {
-  font-size: 9px; font-weight: 600; letter-spacing: 0.4px;
-  text-transform: uppercase; opacity: 0.55; padding-left: 2px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase; opacity: 0.75; padding-left: 2px;
+  color: var(--vscode-descriptionForeground, inherit);
 }
 .header .hbtn.wide { padding: 3px 10px; font-size: 12px; }
 .header .hbtn.on {
@@ -1269,3 +1276,100 @@ button.allow-always:hover { opacity: 1; }
   border-radius: 4px;
 }
 .diff-link:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.2)); }
+
+/* ---- usage alert banner (above composer) ---- */
+.usage-alert {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 14px 0; padding: 8px 12px; border-radius: 10px;
+  font-size: 12.5px; line-height: 1.35;
+}
+.usage-alert.warn {
+  background: rgba(226, 192, 141, 0.14);
+  border: 1px solid var(--vscode-charts-yellow, #e2c08d);
+  color: var(--vscode-charts-yellow, #e2c08d);
+}
+.usage-alert.crit {
+  background: rgba(241, 76, 76, 0.14);
+  border: 1px solid var(--vscode-charts-red, #f14c4c);
+  color: var(--vscode-charts-red, #f14c4c);
+}
+.usage-alert-text { flex: 1; }
+.usage-alert-text b { font-weight: 700; }
+.usage-alert-link {
+  background: transparent; border: none; cursor: pointer; color: inherit;
+  text-decoration: underline; font-size: 12px; padding: 0 2px;
+}
+.usage-alert-x {
+  background: transparent; border: none; cursor: pointer; color: inherit;
+  font-size: 16px; line-height: 1; padding: 0 4px; opacity: 0.8;
+}
+.usage-alert-x:hover { opacity: 1; }
+
+/* ---- MCP status button + panel ---- */
+.header .mcp-btn { display: inline-flex; align-items: center; gap: 4px; }
+.header .mcp-btn.ok { border-color: var(--vscode-charts-green, #3fb950); }
+.header .mcp-btn.warn { border-color: var(--vscode-charts-yellow, #e2c08d); }
+.header .mcp-btn.err { border-color: var(--vscode-charts-red, #f14c4c); }
+/* MCP button lives at the TOP (header), so its panel must open DOWNWARD
+   (the shared .usage-panel opens upward, which would go off-screen here). */
+.mcp-panel {
+  width: 280px;
+  top: calc(100% + 8px);
+  bottom: auto;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.mcp-list { display: flex; flex-direction: column; gap: 6px; }
+.mcp-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.mcp-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.mcp-dot.ok { background: var(--vscode-charts-green, #3fb950); }
+.mcp-dot.warn { background: var(--vscode-charts-yellow, #e2c08d); }
+.mcp-dot.red { background: var(--vscode-charts-red, #f14c4c); }
+.mcp-name { flex: 1; font-family: var(--vscode-editor-font-family, monospace); }
+.mcp-status { opacity: 0.6; font-size: 11px; }
+.mcp-manage {
+  margin-top: 4px; background: transparent; cursor: pointer;
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  color: var(--vscode-foreground); border-radius: 6px; padding: 5px 8px; font-size: 12px;
+}
+.mcp-manage:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.2)); }
+.usage-empty code {
+  font-family: var(--vscode-editor-font-family, monospace);
+  background: var(--vscode-textCodeBlock-background, rgba(0,0,0,0.25));
+  padding: 1px 4px; border-radius: 4px;
+}
+
+/* ---- boot / render-error fallback (never show a silent grey webview) ---- */
+.boot-error {
+  padding: 16px; margin: 16px; border-radius: 10px;
+  border: 1px solid var(--vscode-charts-red, #f14c4c);
+  background: rgba(241, 76, 76, 0.1);
+  font-family: var(--vscode-font-family); font-size: 12.5px;
+}
+.boot-error b { color: var(--vscode-charts-red, #f14c4c); }
+.boot-error pre {
+  white-space: pre-wrap; word-break: break-word; margin: 8px 0;
+  font-family: var(--vscode-editor-font-family, monospace); font-size: 11px;
+  max-height: 40vh; overflow: auto; opacity: 0.85;
+}
+
+/* ---- live reasoning / working indicator ---- */
+.think-label {
+  font-size: 12px; opacity: 0.7; font-style: italic; margin-right: 6px;
+  align-self: center;
+}
+.think-pulse { animation: thinkpulse 1.4s ease-in-out infinite; }
+@keyframes thinkpulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.cc-block.thinking.live .think-toggle { font-weight: 600; }
+.cc-block.thinking.live .cc-gutter { animation: thinkpulse 1.4s ease-in-out infinite; }
+.cc-block.thinking.live .think-body {
+  border-left: 2px solid var(--vscode-charts-purple, #b180d7);
+  padding-left: 10px; opacity: 0.85;
+}
+
+/* ---- quick-bar "show more" toggle ---- */
+.quick-btn.quick-more {
+  opacity: 0.7; font-style: italic;
+  border-style: dashed;
+}
+.quick-btn.quick-more:hover { opacity: 1; }
