@@ -21,6 +21,9 @@ export class SessionManager extends EventEmitter {
   private auth?: AuthEnvResult;
   /** Chats that finished a turn while the user wasn't looking (attention badge). */
   private unseenDone = new Set<string>();
+  /** When true, each session loads its cwd's `.mcp.json` servers (setting-driven,
+   *  set by the extension host at activation). */
+  loadProjectMcp = true;
 
   constructor(private configuredClaudePath: string) {
     super();
@@ -73,6 +76,7 @@ export class SessionManager extends EventEmitter {
       resumeSessionId: opts.resumeSessionId,
       pathToClaudeCodeExecutable: auth.claudePath,
       env: auth.env,
+      loadProjectMcp: this.loadProjectMcp,
     });
     chat.on("update", (snap: ChatSnapshot) => {
       this.emit("chat-update", snap);

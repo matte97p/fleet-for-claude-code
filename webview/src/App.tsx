@@ -407,14 +407,14 @@ const EFFORTS: { id: string; label: string }[] = [
   { id: "xhigh", label: "Molto alto" },
   { id: "max", label: "Massimo" },
 ];
-// Unified "mode" switch (maps to the SDK's 4 permissionMode values). Labels + help
-// mirror Claude Code: default asks each time, acceptEdits auto-accepts file edits,
-// plan is read-only, bypass runs everything without asking.
+// Unified "mode" switch (maps to the SDK's 4 permissionMode values). Labels use
+// Claude Code's own names: Manual asks each time, Edit automatically auto-accepts
+// file edits, Plan mode is read-only, Auto mode runs everything without asking.
 const MODES: { id: string; label: string; help: string }[] = [
-  { id: "default", label: "Chiedi conferma", help: "Chiede conferma prima di ogni azione non pre-approvata (come Claude Code “normale”)." },
-  { id: "acceptEdits", label: "Accetta modifiche", help: "Applica le modifiche ai file senza chiedere; chiede ancora per comandi/altri strumenti." },
-  { id: "plan", label: "Piano (sola lettura)", help: "Analizza e propone un piano senza eseguire modifiche." },
-  { id: "bypassPermissions", label: "Nessuna conferma ⚠", help: "Esegue qualsiasi strumento senza chiedere. Usa con cautela." },
+  { id: "default", label: "Manual", help: "Chiede conferma prima di ogni azione non pre-approvata (come Claude Code “normale”)." },
+  { id: "acceptEdits", label: "Edit automatically", help: "Applica le modifiche ai file senza chiedere; chiede ancora per comandi/altri strumenti." },
+  { id: "plan", label: "Plan mode", help: "Analizza e propone un piano senza eseguire modifiche." },
+  { id: "bypassPermissions", label: "Auto mode ⚠", help: "Esegue qualsiasi strumento senza chiedere. Usa con cautela." },
 ];
 
 function mergeCommands(sdk: AvailableCommand[]): AvailableCommand[] {

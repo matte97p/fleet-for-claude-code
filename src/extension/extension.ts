@@ -98,6 +98,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const configuredClaudePath = cfg.get<string>("pathToClaudeExecutable", "");
 
   const sessions = new SessionManager(configuredClaudePath);
+  // Load each chat's cwd `.mcp.json` servers into the SDK (they aren't
+  // auto-approved in headless mode). Default on; toggle in settings.
+  sessions.loadProjectMcp = cfg.get<boolean>("loadProjectMcp", true);
   const store = new FolderStore(ctx);
   const sidebar = new SidebarProvider(ctx, store, sessions);
   const tree = { refresh: () => {} }; // sidebar auto-refreshes via events

@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
-import type { FolderStore } from "./FolderStore";
+import * as fs from "node:fs";
+import type { FolderStore, FolderMeta } from "./FolderStore";
 import type { SessionManager } from "../core/SessionManager";
+import { findSessionFile } from "./ImportSessions";
 import type {
   SidebarToHost,
   HostToSidebar,
@@ -66,7 +68,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       ],
     };
     view.webview.html = this.html(view.webview);
-    view.webview.onDidReceiveMessage((m: SidebarToHost) => this.onMessage(m));
+    view.webview.onDidReceiveMessage((m: SidebarToHost) => void this.onMessage(m));
     view.onDidChangeVisibility(() => {
       if (view.visible) this.pushTree();
     });
@@ -112,7 +114,50 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this.view.webview.postMessage(msg);
   }
 
-  private onMessage(m: SidebarToHost): void {
+  /** Title of a chat or folder by id (for confirmation dialogs). */
+  private titleOf(id: string): string {
+    return (
+      this.store.getChat(id)?.title ??
+      this.store.folders().find((f) => f.id === id)?.title ??
+      "?"
+    );
+  }
+
+  private isFolder(id: string): boolean {
+    return this.store.folders().some((f) => f.id === id);
+  }
+
+  /** Expand a mixed list of chat/folder ids to every chat id they cover
+   *  (folders recurse into their descendants). Used to find on-disk files. */
+  private affectedChats(ids: string[]): string[] {
+    const out = new Set<string>();
+    const addFolder = (folderId: string) => {
+      for (const c of this.store.chats())
+        if (c.parentId === folderId) out.add(c.id);
+      for (const f of this.store.folders())
+        if (f.parentId === folderId) addFolder(f.id);
+    };
+    for (const id of ids) {
+      if (this.store.getChat(id)) out.add(id);
+      else if (this.isFolder(id)) addFolder(id);
+    }
+    return [...out];
+  }
+
+  /** Breadcrumb path of a folder, e.g. "Work / Backend". */
+  private folderPath(f: FolderMeta): string {
+    const parts = [f.title];
+    let p = f.parentId;
+    while (p) {
+      const pf = this.store.folders().find((x) => x.id === p);
+      if (!pf) break;
+      parts.unshift(pf.title);
+      p = pf.parentId;
+    }
+    return parts.join(" / ");
+  }
+
+  private async onMessage(m: SidebarToHost): Promise<void> {
     const cmd = vscode.commands.executeCommand.bind(vscode.commands);
     switch (m.type) {
       case "ready":
@@ -157,6 +202,155 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           .updateChat(m.id, { parentId: m.folderId })
           .then(() => this.pushTree());
         break;
+
+      case "bulkDelete": {
+        if (!m.ids.length) break;
+        const label =
+          m.ids.length === 1
+            ? `"${this.titleOf(m.ids[0])}"`
+            : `${m.ids.length} elementi`;
+        // Two outcomes: "from list" leaves the .jsonl on disk (re-importable);
+        // "from disk" also deletes the transcript files (permanent).
+        const LIST = "Rimuovi dalla lista";
+        const DISK = "Elimina anche da disco";
+        const choice = await vscode.window.showWarningMessage(
+          `Come vuoi eliminare ${label}?\n\n• "${LIST}": toglie le chat da Claude Fleet ma lascia i transcript su disco (potrai re-importarle).\n• "${DISK}": cancella anche i file .jsonl in ~/.claude/projects — definitivo.`,
+          { modal: true },
+          LIST,
+          DISK
+        );
+        if (choice !== LIST && choice !== DISK) break;
+
+        if (choice === DISK) {
+          const files = this.affectedChats(m.ids)
+            .map((cid) => this.store.getChat(cid)?.sessionId)
+            .filter((sid): sid is string => !!sid)
+            .map((sid) => findSessionFile(sid))
+            .filter((f): f is string => !!f);
+          const second = await vscode.window.showWarningMessage(
+            `Cancellare definitivamente ${files.length} file di sessione da disco? L'operazione non è reversibile.`,
+            { modal: true },
+            "Sì, elimina da disco"
+          );
+          if (second !== "Sì, elimina da disco") break;
+          for (const f of files) {
+            try {
+              fs.rmSync(f, { force: true });
+            } catch (err) {
+              void vscode.window.showErrorMessage(
+                `Impossibile eliminare ${f}: ${err instanceof Error ? err.message : String(err)}`
+              );
+            }
+          }
+        }
+
+        for (const id of m.ids) {
+          // remove() on a folder cascades; a stale child id is then a no-op.
+          const removed = await this.store.remove(id);
+          for (const cid of removed) this.sessions.delete(cid);
+        }
+        if (choice === DISK) {
+          void vscode.window.showInformationMessage(
+            "Chat eliminate da Claude Fleet e da disco."
+          );
+        }
+        break;
+      }
+
+      case "bulkArchive":
+        for (const id of m.ids) {
+          if (!this.store.getChat(id)) continue; // folders can't be archived
+          await this.sessions.get(id)?.interrupt();
+          this.sessions.clearUnseen(id);
+          await this.store.setArchived(id, true);
+        }
+        break;
+
+      case "bulkUnarchive":
+        for (const id of m.ids) {
+          if (!this.store.getChat(id)) continue;
+          await this.store.setArchived(id, false);
+        }
+        break;
+
+      case "bulkMove": {
+        if (!m.ids.length) break;
+        const selectedFolders = new Set(m.ids.filter((id) => this.isFolder(id)));
+        const wouldLoop = (folderId: string): boolean => {
+          let cur: string | null = folderId;
+          while (cur) {
+            if (selectedFolders.has(cur)) return true;
+            cur = this.store.folders().find((f) => f.id === cur)?.parentId ?? null;
+          }
+          return false;
+        };
+        const targets: (vscode.QuickPickItem & { folderId: string | null })[] = [
+          { label: "$(home) Root (nessuna cartella)", folderId: null },
+          ...this.store
+            .folders()
+            .filter((f) => !wouldLoop(f.id))
+            .map((f) => ({
+              label: `$(folder) ${this.folderPath(f)}`,
+              folderId: f.id as string | null,
+            })),
+        ];
+        const picked = await vscode.window.showQuickPick(targets, {
+          title: `Sposta ${m.ids.length} element${m.ids.length === 1 ? "o" : "i"} in…`,
+          placeHolder: "Scegli la cartella di destinazione",
+        });
+        if (!picked) break;
+        for (const id of m.ids) {
+          if (this.store.getChat(id)) {
+            await this.store.updateChat(id, { parentId: picked.folderId });
+          } else if (this.isFolder(id)) {
+            await this.store.moveFolder(id, picked.folderId);
+          }
+        }
+        break;
+      }
+
+      case "bulkRename": {
+        if (!m.ids.length) break;
+        const mode = await vscode.window.showQuickPick(
+          [
+            { label: "$(add) Aggiungi prefisso", id: "prefix" },
+            { label: "$(replace-all) Trova e sostituisci", id: "replace" },
+          ],
+          {
+            title: `Rinomina ${m.ids.length} element${m.ids.length === 1 ? "o" : "i"}`,
+          }
+        );
+        if (!mode) break;
+        const apply = async (fn: (old: string) => string) => {
+          for (const id of m.ids) {
+            const cur =
+              this.store.getChat(id)?.title ??
+              this.store.folders().find((f) => f.id === id)?.title;
+            if (cur == null) continue;
+            const next = fn(cur);
+            if (next && next !== cur) await this.store.rename(id, next);
+          }
+        };
+        if (mode.id === "prefix") {
+          const prefix = await vscode.window.showInputBox({
+            title: "Prefisso da aggiungere",
+            placeHolder: "es. WIP – ",
+          });
+          if (!prefix) break;
+          await apply((old) => prefix + old);
+        } else {
+          const find = await vscode.window.showInputBox({
+            title: "Testo da trovare",
+          });
+          if (!find) break;
+          const replace = await vscode.window.showInputBox({
+            title: "Sostituisci con (lascia vuoto per eliminare il testo)",
+          });
+          if (replace === undefined) break; // cancelled (empty string is valid)
+          await apply((old) => old.split(find).join(replace));
+        }
+        break;
+      }
     }
   }
 

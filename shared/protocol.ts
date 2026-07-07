@@ -302,7 +302,13 @@ export type SidebarToHost =
   | { type: "delete"; id: string }
   | { type: "deleteDisk"; id: string }
   | { type: "stop"; id: string }
-  | { type: "move"; id: string; folderId: string | null };
+  | { type: "move"; id: string; folderId: string | null }
+  // ---- bulk (multi-select) operations; each carries the selected chat/folder ids ----
+  | { type: "bulkDelete"; ids: string[] }
+  | { type: "bulkArchive"; ids: string[] }
+  | { type: "bulkUnarchive"; ids: string[] }
+  | { type: "bulkMove"; ids: string[] } // host prompts for the target folder
+  | { type: "bulkRename"; ids: string[] }; // host prompts for prefix / find-replace
 
 // ---- extension -> sidebar ----
 export type HostToSidebar = { type: "tree"; tree: SidebarTree };

@@ -1,4 +1,6 @@
 import { EventEmitter } from "node:events";
+import * as fs from "node:fs";
+import * as path from "node:path";
 // Types only — erased at build time so this stays a `type` import (no runtime require).
 import type {
   Query,
@@ -58,6 +60,9 @@ export interface ChatSessionInit {
   /** Environment for the subprocess. We deliberately strip ANTHROPIC_API_KEY
    *  so the SDK falls back to the logged-in subscription (see AuthPreflight). */
   env: NodeJS.ProcessEnv;
+  /** When true, load the cwd's `.mcp.json` and pass its servers to the SDK
+   *  (project `.mcp.json` servers aren't auto-approved in headless mode). */
+  loadProjectMcp?: boolean;
 }
 
 /**
@@ -111,6 +116,7 @@ export class ChatSession extends EventEmitter {
   private closed = false;
   private readonly env: NodeJS.ProcessEnv;
   private readonly pathToClaude?: string;
+  private readonly loadProjectMcp: boolean;
 
   constructor(init: ChatSessionInit) {
     super();
@@ -124,6 +130,24 @@ export class ChatSession extends EventEmitter {
     this.sessionId = init.resumeSessionId;
     this.env = init.env;
     this.pathToClaude = init.pathToClaudeCodeExecutable;
+    this.loadProjectMcp = init.loadProjectMcp ?? false;
+  }
+
+  /** Read the cwd's `.mcp.json` so its servers can be passed to the SDK. The SDK
+   *  won't load project `.mcp.json` servers on its own (they need approval), so
+   *  we hand them over explicitly. Re-read on each (re)start to pick up edits. */
+  private projectMcpServers(): Record<string, unknown> | undefined {
+    if (!this.loadProjectMcp) return undefined;
+    try {
+      const raw = fs.readFileSync(path.join(this.cwd, ".mcp.json"), "utf8");
+      const servers = JSON.parse(raw)?.mcpServers;
+      if (servers && typeof servers === "object" && Object.keys(servers).length) {
+        return servers as Record<string, unknown>;
+      }
+    } catch {
+      /* no .mcp.json / unreadable / malformed → nothing to add */
+    }
+    return undefined;
   }
 
   // ---- public API used by SessionManager / commands ----
@@ -502,9 +526,11 @@ export class ChatSession extends EventEmitter {
     try {
       const { query } = await loadSdk();
       const c = this.config;
+      const projectMcp = this.projectMcpServers();
       const options: Options = {
         cwd: this.cwd,
         env: this.env,
+        ...(projectMcp ? { mcpServers: projectMcp as Options["mcpServers"] } : {}),
         includePartialMessages: true,
         enableFileCheckpointing: true, // enables rewindFiles()
         forwardSubagentText: true, // forward subagent text/thinking for nested transcripts

@@ -125,6 +125,21 @@ export class FolderStore {
     }
   }
 
+  /** Reparent a folder, guarding against cycles (can't move it into itself
+   *  or one of its own descendants). No-op if that would create a loop. */
+  async moveFolder(id: string, parentId: string | null): Promise<void> {
+    if (id === parentId) return;
+    const f = this.data.folders.find((x) => x.id === id);
+    if (!f) return;
+    let cur = parentId;
+    while (cur) {
+      if (cur === id) return; // parentId is a descendant of id → would loop
+      cur = this.data.folders.find((x) => x.id === cur)?.parentId ?? null;
+    }
+    f.parentId = parentId;
+    await this.persist();
+  }
+
   async remove(id: string): Promise<string[]> {
     // Returns the ids of chats that were removed (so their sessions can be disposed).
     const removedChats: string[] = [];

@@ -2,20 +2,21 @@ import * as vscode from "vscode";
 import type { SessionManager } from "../core/SessionManager";
 import type { ChatSnapshot } from "../../shared/protocol";
 import { ChatPanel } from "./ChatPanel";
-import { buildSoundPlay } from "./SoundConfig";
+import { playNotificationSound } from "./SystemSound";
 
 /**
- * Plays a sound (via the webview) and shows a VS Code toast when a chat needs
- * a permission or finishes a turn. Sounds always fire (user preference);
- * toasts are informational and let you jump straight to the chat.
+ * Plays a sound and shows a VS Code toast when a chat needs a permission or
+ * finishes a turn. The sound is played from the extension host (see
+ * SystemSound) so it fires even when no chat panel is open — the common case in
+ * a multi-session tool. Sounds always fire (user preference); toasts are
+ * informational and let you jump straight to the chat.
  */
 export function registerNotifications(
   ctx: vscode.ExtensionContext,
   sessions: SessionManager
 ): void {
   const onPermission = (snap: ChatSnapshot) => {
-    const play = buildSoundPlay("permission");
-    if (play) ChatPanel.playSound(play);
+    playNotificationSound("permission");
     void vscode.window
       .showWarningMessage(
         `“${snap.title}” needs permission: ${
@@ -33,8 +34,7 @@ export function registerNotifications(
   };
 
   const onTurnDone = (snap: ChatSnapshot) => {
-    const play = buildSoundPlay("done");
-    if (play) ChatPanel.playSound(play);
+    playNotificationSound("done");
     // Keep the "done" toast quiet if you're already looking at this chat.
     if (ChatPanel.isFocused()) return;
     void vscode.window

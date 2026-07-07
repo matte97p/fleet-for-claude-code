@@ -568,7 +568,8 @@ button.allow {
   gap: 2px;
   align-items: center;
 }
-.sb-chat:hover .sb-actions { display: flex; }
+.sb-chat:hover .sb-actions,
+.sb-folder-head:hover .sb-actions { display: flex; }
 .sb-a {
   background: transparent;
   color: var(--vscode-foreground);
@@ -596,6 +597,36 @@ button.allow {
 .sb-folder-count { font-size: 11px; opacity: 0.55; display: flex; gap: 6px; align-items: center; }
 .sb-run-badge { color: var(--vscode-charts-blue, #3794ff); font-size: 9px; }
 .sb-folder-body { padding-left: 12px; border-left: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.18)); margin-left: 12px; }
+
+/* ---- multi-select (bulk operations) ---- */
+.sb-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.22));
+  background: var(--vscode-inputOption-activeBackground, rgba(120,150,255,0.12));
+  position: sticky;
+  top: 45px;
+  z-index: 1;
+}
+.sb-bulk-count { font-size: 12px; opacity: 0.75; white-space: nowrap; }
+.sb-bulk-actions { display: flex; gap: 2px; margin-left: auto; }
+.sb-bulk-actions .sb-a { font-size: 14px; padding: 4px 6px; opacity: 0.9; }
+.sb-a[disabled] { opacity: 0.3; cursor: default; }
+.sb-a[disabled]:hover { background: transparent; }
+.sb-check {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--vscode-charts-blue, #3794ff);
+}
+.sb-chat.selected,
+.sb-folder-head.selected {
+  background: var(--vscode-list-activeSelectionBackground, rgba(55,148,255,0.22));
+}
 
 /* ============ v2: stronger You/Claude, legible permission, usage bar ============ */
 
@@ -1373,3 +1404,148 @@ button.allow-always:hover { opacity: 1; }
   border-style: dashed;
 }
 .quick-btn.quick-more:hover { opacity: 1; }
+
+/* ============================================================================
+   Chat clarity refresh — more color + legibility, closer to the Claude Code
+   extension. Appended last so it wins over earlier rules. Uses VS Code theme
+   vars so it stays correct in every light/dark theme.
+   ========================================================================== */
+
+/* A little more breathing room so turns are easy to scan. */
+.transcript { gap: 14px; padding: 20px 18px 12px; }
+
+/* Gutters read as colored role markers, not faint glyphs. */
+.cc-gutter { opacity: 0.9; }
+
+/* ---- Role identity: You (blue) vs Claude (orange) ---- */
+.cc-block.user {
+  background: var(--vscode-textBlockQuote-background, rgba(74, 158, 255, 0.12));
+  border-left-width: 3px;
+}
+.cc-block.assistant .cc-body::before { color: #d97757; }
+.cc-block.assistant .cc-gutter { color: #d97757; }
+
+/* ---- Tool calls: each reads as a distinct card with a green accent ---- */
+.cc-block.tool > .cc-body {
+  background: var(--vscode-editorWidget-background, rgba(128, 128, 128, 0.06));
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.2));
+  border-left: 3px solid var(--vscode-charts-green, #2ea043);
+  border-radius: 8px;
+  padding: 7px 11px;
+}
+/* Diff rows already carry their own framed diff → keep only the accent rail,
+   drop the card background/border to avoid a box-inside-a-box. */
+.cc-block.tool.diff > .cc-body {
+  background: transparent;
+  border: none;
+  border-left: 3px solid var(--vscode-charts-green, #2ea043);
+  border-radius: 0;
+  padding: 2px 0 2px 11px;
+}
+/* Tool name → a colored chip, so the action jumps out from its arguments. */
+.cc-tool-name {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-right: 8px;
+  border-radius: 6px;
+  background: rgba(46, 160, 67, 0.16);
+  color: var(--vscode-charts-green, #2ea043);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.cc-tool-arg { opacity: 0.88; }
+
+/* ---- Tool results: legible (was very dim) and tied to their tool ---- */
+.cc-block.result .cc-gutter { color: var(--vscode-charts-green, #2ea043); opacity: 0.65; }
+.cc-block.result .cc-result { opacity: 0.9; }
+.cc-block.result .cc-result.fail { opacity: 1; }
+
+/* ---- Permission card: unmissable (this is the one you must act on) ---- */
+.permission {
+  border-width: 1.5px;
+  background: rgba(226, 192, 141, 0.13);
+  box-shadow: 0 0 0 1px rgba(226, 192, 141, 0.28), 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+.perm-badge::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--vscode-charts-yellow, #e2c08d);
+  vertical-align: middle;
+  animation: blink 1s step-start infinite;
+}
+button.allow { font-weight: 600; }
+
+/* Plan card gets the same lift as the permission card. */
+.plan-card {
+  box-shadow: 0 0 0 1px rgba(74, 158, 255, 0.22), 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+/* ============================================================================
+   Chat clarity refresh — clearer color-coding & structure, closer to the
+   Claude Code extension: user=blue, Claude=brand orange, tools=green cards,
+   thinking=purple, errors=red. Kept as overrides so nothing above breaks.
+   ============================================================================ */
+
+/* A touch more breathing room + rhythm between top-level blocks. */
+.transcript { padding: 20px 18px 12px; gap: 15px; }
+
+/* Role labels: slightly bolder, better spaced. */
+.cc-body.user-text::before,
+.cc-block.assistant .cc-body::before { letter-spacing: 0.6px; margin-bottom: 4px; }
+
+/* ── User turn: crisper blue card ─────────────────────────────────────── */
+.cc-block.user {
+  background: var(--vscode-textBlockQuote-background, rgba(74, 158, 255, 0.10));
+  border-left: 3px solid var(--vscode-charts-blue, #4a9eff);
+  box-shadow: inset 0 0 0 1px rgba(74, 158, 255, 0.08);
+}
+
+/* ── Tool call: a compact green-accented card so each action reads as one ── */
+.cc-block.tool:not(.diff) {
+  background: rgba(46, 160, 67, 0.07);
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.18));
+  border-left: 3px solid var(--vscode-charts-green, #2ea043);
+  border-radius: 8px;
+  padding: 6px 12px 6px 8px;
+}
+.cc-block.tool .cc-gutter.dot { color: var(--vscode-charts-green, #3fb950); opacity: 1; }
+.cc-tool-name {
+  color: var(--vscode-charts-green, #3fb950);
+  font-weight: 700;
+}
+.cc-tool-arg { opacity: 0.88; }
+
+/* Diff blocks: same green accent, but no tint (it wraps real code). */
+.cc-block.tool.diff {
+  border-left: 3px solid var(--vscode-charts-green, #2ea043);
+  border-radius: 8px;
+  padding: 4px 4px 4px 8px;
+  background: rgba(46, 160, 67, 0.035);
+}
+.cc-block.tool.diff .cc-tool-name { color: var(--vscode-charts-green, #3fb950); }
+
+/* ── Tool result: pull it up under its tool call and make it readable ──── */
+.cc-block.result { margin-top: -9px; }
+.cc-block.result .cc-gutter { color: var(--vscode-charts-green, #3fb950); opacity: 0.75; }
+.cc-result { opacity: 0.82; color: var(--vscode-foreground); }
+
+/* ── Permission & plan cards: make the decision points pop ─────────────── */
+.permission {
+  background: rgba(226, 192, 141, 0.12);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.22);
+}
+.plan-card { box-shadow: 0 2px 14px rgba(0, 0, 0, 0.22); }
+.perm-actions .allow,
+.plan-card .allow { font-weight: 600; }
+
+/* Errors: a clearer red band. */
+.cc-block.error {
+  background: rgba(241, 76, 76, 0.10);
+  border-left: 3px solid var(--vscode-charts-red, #f14c4c);
+  border-radius: 8px;
+  padding: 7px 12px 7px 8px;
+}
+.cc-block.error .cc-gutter { color: var(--vscode-charts-red, #f14c4c); opacity: 1; }

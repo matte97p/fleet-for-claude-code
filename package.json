@@ -2,7 +2,7 @@
   "name": "claude-fleet",
   "displayName": "Fleet for Claude Code",
   "description": "Unofficial multi-session manager for Claude Code — run and monitor N concurrent chats from one panel. Not affiliated with Anthropic.",
-  "version": "0.0.18",
+  "version": "0.0.20",
   "publisher": "matte97p",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -227,12 +227,17 @@
             "bypassPermissions"
           ],
           "enumItemLabels": [
-            "Ask before actions (default)",
-            "Auto-accept file edits",
-            "Plan mode (read-only)",
-            "Bypass all permissions ⚠"
+            "Manual",
+            "Edit automatically",
+            "Plan mode",
+            "Auto mode ⚠"
           ],
-          "markdownDescription": "Default **permission mode** for new chats. `bypassPermissions` runs tools without asking — use with care."
+          "markdownDescription": "Default **permission mode** for new chats (Claude Code names). `Auto mode` runs tools without asking — use with care."
+        },
+        "claudeFleet.loadProjectMcp": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Load the servers from the chat's working-directory `.mcp.json` into the session. Project `.mcp.json` servers aren't auto-approved in headless mode, so without this the MCP count stays 0. Restart the chat after changing."
         },
         "claudeFleet.sound.enabled": {
           "type": "boolean",
