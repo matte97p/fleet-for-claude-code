@@ -562,6 +562,10 @@ button.allow {
 .sb-dot.waiting-permission { background: var(--vscode-charts-yellow, #e2c08d); animation: blink 1s step-start infinite; }
 .sb-dot.error { background: var(--vscode-charts-red, #f14c4c); }
 .sb-dot.archived { background: transparent; border: 1.5px solid var(--vscode-descriptionForeground); }
+/* stati arricchiti: finito=verde, pensando=viola, scrivendo=blu */
+.sb-dot.idle { background: var(--vscode-charts-green, #3fb950); }
+.sb-dot.thinking { background: var(--vscode-charts-purple, #b180d7); animation: pulse 1.4s ease-out infinite; }
+.sb-dot.writing { background: var(--vscode-charts-blue, #3794ff); animation: pulse 1.4s ease-out infinite; }
 
 .sb-actions {
   display: none;
@@ -827,6 +831,10 @@ button.allow-always:hover { opacity: 1; }
 .db-dot.waiting-permission { background: var(--vscode-charts-yellow, #e2c08d); animation: blink 1s step-start infinite; }
 .db-dot.error { background: var(--vscode-charts-red, #f14c4c); }
 .db-dot.archived { background: transparent; border: 1.5px solid var(--vscode-descriptionForeground); }
+/* stati arricchiti: finito=verde, pensando=viola, scrivendo=blu */
+.db-dot.idle { background: var(--vscode-charts-green, #3fb950); }
+.db-dot.thinking { background: var(--vscode-charts-purple, #b180d7); animation: pulse 1.4s ease-out infinite; }
+.db-dot.writing { background: var(--vscode-charts-blue, #3794ff); animation: pulse 1.4s ease-out infinite; }
 
 /* ============ Composer: input wrapper + slash + @-mention menus ============ */
 .composer-input { position: relative; flex: 1; display: flex; }

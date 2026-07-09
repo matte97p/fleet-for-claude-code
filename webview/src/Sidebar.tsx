@@ -13,6 +13,7 @@ import type {
   SidebarToHost,
   HostToSidebar,
   ChatStatus,
+  RunPhase,
 } from "../../shared/protocol";
 
 function post(msg: SidebarToHost) {
@@ -280,7 +281,7 @@ function ChatRow({ chat, active }: { chat: SidebarChat; active: boolean }) {
           onClick={(e) => e.stopPropagation()}
         />
       )}
-      <StatusDot status={chat.status} archived={chat.archived} />
+      <StatusDot status={chat.status} phase={chat.phase} archived={chat.archived} />
       <div className="sb-chat-main">
         <div className="sb-chat-title">{chat.title}</div>
         <div className="sb-chat-sub">{subLabel(chat)}</div>
@@ -325,8 +326,21 @@ function ChatRow({ chat, active }: { chat: SidebarChat; active: boolean }) {
   );
 }
 
-function StatusDot({ status, archived }: { status: ChatStatus; archived: boolean }) {
-  const cls = archived ? "archived" : status;
+function StatusDot({
+  status,
+  phase,
+  archived,
+}: {
+  status: ChatStatus;
+  phase?: RunPhase;
+  archived: boolean;
+}) {
+  // Running splits into "thinking" (viola) vs "writing" (blu); idle→verde, ecc.
+  const cls = archived
+    ? "archived"
+    : status === "running"
+      ? (phase ?? "writing")
+      : status;
   return <span className={`sb-dot ${cls}`} />;
 }
 

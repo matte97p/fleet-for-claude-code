@@ -106,6 +106,12 @@ export class DashboardPanel {
           folderPath: this.folderPath(c.parentId),
           status,
           activity: snap?.activity,
+          phase:
+            status === "running"
+              ? snap?.streamingThinking && !snap?.streamingText
+                ? "thinking"
+                : "writing"
+              : undefined,
           model: snap?.model ?? c.model,
           cwd: c.cwd,
           archived: c.archived ?? false,

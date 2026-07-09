@@ -8,6 +8,10 @@ export type ChatStatus =
   | "waiting-permission" // a tool wants permission; UI must decide
   | "error"; // last turn ended with an error
 
+/** Sub-phase while status is "running", for finer status indicators:
+ * "thinking" = extended reasoning in flight, "writing" = streaming the answer / using tools. */
+export type RunPhase = "thinking" | "writing";
+
 /** One entry in a TodoWrite checklist. */
 export interface TodoEntry {
   content: string;
@@ -270,6 +274,8 @@ export interface SidebarChat {
   parentId: string | null;
   status: ChatStatus;
   activity?: string;
+  /** Set only while status === "running": "thinking" vs "writing". */
+  phase?: RunPhase;
   archived: boolean;
   // Enriched info for a richer sidebar row:
   model?: string;
@@ -342,6 +348,8 @@ export interface DashboardCard {
   folderPath?: string; // breadcrumb e.g. "Work / Backend"; undefined = root
   status: ChatStatus;
   activity?: string;
+  /** Set only while status === "running": "thinking" vs "writing". */
+  phase?: RunPhase;
   model?: string;
   cwd: string;
   archived: boolean;

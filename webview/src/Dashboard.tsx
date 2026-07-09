@@ -78,7 +78,15 @@ function Card({ card, active }: { card: DashboardCard; active: boolean }) {
       onClick={() => post({ type: "open", chatId: card.id })}
     >
       <div className="db-card-head">
-        <span className={`db-dot ${card.archived ? "archived" : card.status}`} />
+        <span
+          className={`db-dot ${
+            card.archived
+              ? "archived"
+              : card.status === "running"
+                ? (card.phase ?? "writing")
+                : card.status
+          }`}
+        />
         <span className="db-card-title">{card.title}</span>
       </div>
       {card.folderPath && <div className="db-folder">📁 {card.folderPath}</div>}

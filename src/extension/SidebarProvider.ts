@@ -96,6 +96,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             parentId: c.parentId,
             status: snap?.status ?? "idle",
             activity: snap?.activity,
+            phase:
+              snap?.status === "running"
+                ? snap.streamingThinking && !snap.streamingText
+                  ? "thinking"
+                  : "writing"
+                : undefined,
             archived: c.archived ?? false,
             model: snap?.model ?? c.model,
             cwd: c.cwd,
