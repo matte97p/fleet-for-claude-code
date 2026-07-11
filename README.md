@@ -92,3 +92,8 @@ Not yet: drag-and-drop reordering into folders, a grid "dashboard" of all chats 
 "remember this permission" rules, and restoring past transcript text on resume (currently
 resume continues the SDK session but the panel starts with an empty transcript until the
 next turn).
+
+
+---
+
+<sub>🌐 Built by **Matteo Perino** — [matteoperino.dev](https://matteoperino.dev)</sub>
